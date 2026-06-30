@@ -28,6 +28,20 @@ logger = logging.getLogger(__name__)
 # Default maximum workspace age in seconds before orphan reaping
 DEFAULT_MAX_WORKSPACE_AGE = 3600
 
+# Hard ceiling on concurrent active workspaces (prevents disk/container exhaustion)
+DEFAULT_MAX_CONCURRENT_WORKSPACES = 10
+
+
+class WorkspaceLimitExceededError(Exception):
+    """Raised when the maximum number of concurrent workspaces is reached."""
+
+    def __init__(self, current: int, limit: int) -> None:
+        self.current = current
+        self.limit = limit
+        super().__init__(
+            f"Maximum concurrent workspaces reached: {current}/{limit}. "
+            f"Wait for existing tasks to complete or increase the limit."
+        )
 
 class WorkspaceStatus(str, Enum):
     """Status of a managed workspace."""
