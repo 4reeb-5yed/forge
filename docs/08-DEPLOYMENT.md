@@ -37,6 +37,9 @@ services:
         condition: service_healthy
     volumes:
       - workspaces:/tmp/forge-workspaces
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - "999"  # Docker socket GID — adjust for your host
 
 volumes:
   pgdata:
@@ -48,14 +51,21 @@ volumes:
 | Service | Image | Purpose |
 |---------|-------|---------|
 | `postgres` | postgres:16-alpine | Database for sessions, audit, checkpoints, learning |
-| `forge-api` | Built from `backend/Dockerfile` | FastAPI application server |
+| `forge-api` | Built from `backend/Dockerfile` | FastAPI application server + sandbox orchestrator |
 
 ### Volumes
 
-| Volume | Purpose |
+| Volume / Mount | Purpose |
 |--------|---------|
 | `pgdata` | PostgreSQL data persistence across restarts |
 | `workspaces` | Isolated workspace directories for task execution |
+| `/var/run/docker.sock` | Allows forge-api to spawn sandbox containers on the host daemon |
+
+### Docker Socket Access
+
+The forge-api container mounts the host's Docker socket so that `SandboxedAiderTool` can spawn ephemeral sandbox containers. This is **not** Docker-in-Docker — the sandbox containers run as siblings on the host daemon. The sandbox containers themselves have no socket access (`--network none`, no volume mounts except workspace).
+
+The `group_add: ["999"]` gives the forge-api process permission to write to the socket. If your host's docker group has a different GID (check with `stat -c '%g' /var/run/docker.sock`), update this value.
 
 ### Health Checks
 

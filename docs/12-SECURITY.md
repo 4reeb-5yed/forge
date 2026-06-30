@@ -74,9 +74,25 @@ Controlled by the `FORGE_USE_SANDBOX` environment variable:
 
 | Value | Behavior |
 |-------|----------|
-| `auto` (default) | Uses Docker sandbox if `docker` is on PATH, falls back to direct Aider |
-| `always` | Always uses Docker sandbox (fails if Docker unavailable) |
+| `auto` (default) | Uses Docker sandbox if `docker` CLI is on PATH; falls back to unsandboxed Aider with a **WARNING**-level log |
+| `always` | Requires Docker sandbox — **raises `RuntimeError` and halts startup** if Docker CLI is not found |
 | `never` | Always uses direct Aider subprocess (no sandbox) |
+
+**Fail-loud behavior:** In `auto` mode, the fallback to unsandboxed execution is logged at WARNING level with an explicit message about the security implications. In `always` mode, a missing Docker CLI is a hard startup failure — the API will not start. There is no silent degradation.
+
+### Deployment Prerequisites
+
+For the sandbox to function in the Docker Compose deployment:
+
+1. **Docker CLI in the container** — The `backend/Dockerfile` installs `docker-ce-cli` from Docker's official Debian repository. This gives the forge-api process the `docker` binary needed to spawn sandbox containers.
+
+2. **Docker socket mount** — `docker-compose.yml` mounts `/var/run/docker.sock` into the forge-api container so that `docker run` commands reach the host daemon.
+
+3. **Socket permissions** — `group_add: ["999"]` grants the container process access to the socket. Adjust the GID to match your host's docker group (`stat -c '%g' /var/run/docker.sock`).
+
+4. **Sandbox image pre-built** — The `forge-aider-sandbox:latest` image must exist on the host before sandbox execution works.
+
+Without all four, the sandbox will either fail loudly (`always` mode) or fall back with a warning (`auto` mode).
 
 ### Sandbox Image
 
@@ -168,9 +184,12 @@ The audit section appears in the output as:
 ## Security Checklist for Operators
 
 - [ ] Build the sandbox image before first use: `docker build -t forge-aider-sandbox:latest -f Dockerfile.sandbox .`
-- [ ] Set `FORGE_USE_SANDBOX=always` in production (fail-closed if Docker unavailable)
+- [ ] Verify Docker socket is mounted: `docker-compose exec forge-api docker version`
+- [ ] Set `FORGE_USE_SANDBOX=always` in production (hard failure if sandbox unavailable)
+- [ ] Verify the docker GID in `group_add` matches your host: `stat -c '%g' /var/run/docker.sock`
 - [ ] Rotate `OPENROUTER_API_KEY` periodically (it's the only secret exposed to AI)
 - [ ] Monitor audit trail for `commit_blocked` events (indicates AI attempted sensitive modifications)
+- [ ] Monitor WARNING logs for "falling back to UNSANDBOXED" (should never appear in production)
 - [ ] Set `FORGE_API_TOKEN` to a strong random value
 - [ ] Never expose PostgreSQL port (5432) externally
 - [ ] Use TLS termination in front of the API

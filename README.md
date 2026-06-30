@@ -42,14 +42,18 @@ git clone https://github.com/4reeb-5yed/forge.git
 cd forge
 cp .env.docker .env.docker.local
 # Edit .env.docker.local with your API keys (OPENROUTER_API_KEY, GITHUB_TOKEN)
+# Set FORGE_USE_SANDBOX=always for production (hard failure if sandbox broken)
 
 # Build the sandbox image (required for secure AI code execution)
 cd backend
 docker build -t forge-aider-sandbox:latest -f Dockerfile.sandbox .
 cd ..
 
-# Start everything
+# Start everything (includes Docker socket mount for sandbox)
 docker-compose up -d
+
+# Verify sandbox access works inside the container
+docker-compose exec forge-api docker version
 
 # Run database migrations
 cd backend
