@@ -18,10 +18,15 @@
 | OpenRouter adapter (complete + stream + error classification) | ✅ Implemented |
 | GitHub VCS adapter (clone/commit/push + token sanitization) | ✅ Implemented |
 | Aider tool adapter (subprocess + timeout) | ✅ Implemented |
+| **Sandboxed Aider tool (Docker container per task)** | ✅ Implemented |
+| **Pre-commit scope check (blocks sensitive path modifications)** | ✅ Implemented |
+| **Workspace hard ceiling (prevents resource exhaustion)** | ✅ Implemented |
+| **Diff audit logging (captures all AI-generated changes)** | ✅ Implemented |
+| **Secret isolation (only OPENROUTER_API_KEY reaches sandbox)** | ✅ Verified |
 | PostgreSQL schema + stores + migrations | ✅ Ready to use |
 | Docker Compose deployment | ✅ Working |
 | Next.js frontend with real-time events | ✅ Working |
-| 1,240+ tests (unit + property-based) | ✅ All passing |
+| 1,280+ tests (unit + property-based) | ✅ All passing |
 | API authentication (Bearer token) | ✅ Working |
 | WebSocket event streaming | ✅ Working |
 | Boundary enforcement (architectural drift prevention) | ✅ Working |
@@ -70,7 +75,7 @@ Each session targets a single repository. There's no support for builds that spa
 
 ### 8. Workspace Cleanup
 
-Workspaces are created per-task but cleanup is basic. There's no automated TTL-based garbage collection.
+Workspaces are created per-task with a hard ceiling (default 10 concurrent) and orphan reaping. The reaper destroys workspaces whose owning task is no longer active and whose age exceeds `max_workspace_age` (default 1 hour). For long-running deployments, consider monitoring disk usage of the workspace volume.
 
 ## Planned Improvements
 
@@ -80,7 +85,7 @@ Workspaces are created per-task but cleanup is basic. There's no automated TTL-b
 |------------|-------------|
 | Wire PostgreSQL stores | Replace in-memory stores in `assemble_deps()` with real DB stores |
 | Frontend approval UI | Surface `approval_pending` state with approve/reject buttons |
-| Workspace TTL cleanup | Background task that cleans up completed workspaces after N hours |
+| gVisor/Firecracker option | Stronger sandbox than Docker for untrusted code execution |
 
 ### Medium-Term (1–3 Months)
 

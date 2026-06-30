@@ -102,6 +102,7 @@ curl http://localhost:8000/health
 | `FORGE_ENV` | No | `production` | Environment name |
 | `FORGE_LOG_LEVEL` | No | `INFO` | Logging level |
 | `FORGE_CONFIG_DIR` | No | `./config` | Path to YAML config directory |
+| `FORGE_USE_SANDBOX` | No | `auto` | Sandbox mode: `auto`, `always`, or `never` |
 | `SESSION_MAX_TOKENS` | No | `1000000` | Max tokens per session budget |
 | `HEALTH_MONITOR_INTERVAL_S` | No | `30` | Health check interval in seconds |
 
@@ -120,6 +121,9 @@ GITHUB_TOKEN=ghp_your-github-token
 
 # Coding Tool
 AIDER_MODEL=claude-sonnet-4-20250514
+
+# Sandbox (auto=use Docker if available, always=require Docker, never=no sandbox)
+FORGE_USE_SANDBOX=auto
 
 # Authentication
 FORGE_API_TOKEN=your-secret-api-token
@@ -165,6 +169,11 @@ npm run dev
 - **Network isolation** — Don't expose PostgreSQL port (5432) to the internet
 - **TLS termination** — Put a reverse proxy (nginx, Caddy, ALB) in front of the API
 - **Token rotation** — Rotate `GITHUB_TOKEN` and `OPENROUTER_API_KEY` periodically
+- **Build the sandbox image** — `docker build -t forge-aider-sandbox:latest -f Dockerfile.sandbox .`
+- **Set `FORGE_USE_SANDBOX=always`** in production for fail-closed sandbox enforcement
+- **Monitor `commit_blocked` events** in the audit trail for signs of AI attempting sensitive modifications
+
+See [Security](./12-SECURITY.md) for the complete security model.
 
 ### Persistence
 

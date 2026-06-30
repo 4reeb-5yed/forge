@@ -132,6 +132,8 @@ await vcs.push(workspace_path)                      # 3. git push
 
 Spawns [Aider](https://aider.chat) as a subprocess to execute coding tasks. Aider is an AI-powered coding assistant that makes changes directly to files.
 
+> **Note:** In production, prefer the **SandboxedAiderTool** (see below) which runs Aider inside a Docker container with full isolation. The direct `AiderTool` is a fallback for environments without Docker.
+
 ### Configuration
 
 | Variable | Default | Description |
@@ -180,6 +182,87 @@ class ToolResult:
     success: bool      # True if exit code == 0
     output: str        # stdout
     error: str         # stderr (only populated on failure)
+```
+
+---
+
+## Sandboxed Aider Tool (Recommended)
+
+**File:** `backend/app/adapters/sandboxed_aider.py`
+
+### What It Does
+
+Drop-in replacement for `AiderTool` that runs every coding task inside an ephemeral Docker container with maximum security restrictions. This is the **recommended** coding tool for production use.
+
+### Why Use It
+
+The direct `AiderTool` runs with the same privileges as the Forge backend process — any AI-generated command has full host access. The sandboxed version isolates execution so that even malicious or buggy AI output cannot escape the workspace.
+
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FORGE_USE_SANDBOX` | `auto` | `auto` / `always` / `never` — controls which tool is used |
+| `AIDER_MODEL` | `claude-sonnet-4-20250514` | Model for Aider |
+| Timeout | 300s | Container killed on timeout |
+| Image | `forge-aider-sandbox:latest` | Docker image to use |
+| Memory | `2g` | Container memory limit |
+| CPU | `2.0` | Container CPU limit |
+| PIDs | `256` | Max processes inside container |
+
+### Class: `SandboxedAiderTool`
+
+```python
+class SandboxedAiderTool:
+    name = "aider-sandboxed"
+    
+    async def execute(task_description: str, workspace_path: str) -> ToolResult
+    async def health_check() -> Health
+```
+
+### Security Properties
+
+| Control | Implementation |
+|---------|---------------|
+| Network isolation | `--network none` |
+| Non-root execution | `--user 1000:1000` |
+| Read-only root filesystem | `--read-only` |
+| All capabilities dropped | `--cap-drop ALL` |
+| No privilege escalation | `--security-opt no-new-privileges` |
+| Resource limits | `--memory`, `--cpus`, `--pids-limit` |
+| Workspace-only mount | `-v {workspace}:/workspace:rw` |
+| Secret isolation | Only `OPENROUTER_API_KEY` passed |
+| Diff audit logging | Captures `git diff` after execution |
+
+### Diff Audit Logging
+
+After Aider completes, the tool captures the workspace `git diff` and appends it to the `ToolResult.output`. This ensures every AI-generated change is recorded in the audit trail regardless of whether the commit succeeds:
+
+```
+--- WORKSPACE DIFF (post-execution) ---
++added line
+-removed line
+--- END DIFF ---
+```
+
+Diffs are capped at 50KB to prevent bloat.
+
+### Building the Sandbox Image
+
+```bash
+cd backend
+docker build -t forge-aider-sandbox:latest -f Dockerfile.sandbox .
+```
+
+### Health Check
+
+The health check verifies:
+1. Docker daemon is running
+2. The sandbox image (`forge-aider-sandbox:latest`) exists locally
+
+```python
+health = await tool.health_check()
+# Health.unhealthy("Sandbox image 'forge-aider-sandbox:latest' not found...")
 ```
 
 ---

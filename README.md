@@ -14,12 +14,13 @@ Comprehensive documentation lives in [`docs/`](./docs/README.md):
 | [Architecture](./docs/02-ARCHITECTURE.md) | 6-layer design, event bus, data flow |
 | [Runtime Modules](./docs/03-RUNTIME-MODULES.md) | All 27 modules with APIs and events |
 | [Workflow](./docs/04-WORKFLOW.md) | LangGraph state machine, nodes, routing |
-| [Adapters](./docs/05-ADAPTERS.md) | OpenRouter, GitHub VCS, Aider |
+| [Adapters](./docs/05-ADAPTERS.md) | OpenRouter, GitHub VCS, Aider, Sandboxed Aider |
 | [Database](./docs/06-DATABASE.md) | PostgreSQL schema, stores, migrations |
 | [Frontend](./docs/07-FRONTEND.md) | Next.js UI, components, WebSocket |
 | [Deployment](./docs/08-DEPLOYMENT.md) | Docker Compose, env vars, scaling |
 | [Testing](./docs/09-TESTING.md) | Test strategy, property-based testing |
 | [Future](./docs/10-FUTURE.md) | Roadmap, limitations, tradeoffs |
+| [Security](./docs/12-SECURITY.md) | Workspace sandboxing, scope checks, secret isolation |
 
 ## What It Does
 
@@ -42,6 +43,11 @@ cd forge
 cp .env.docker .env.docker.local
 # Edit .env.docker.local with your API keys (OPENROUTER_API_KEY, GITHUB_TOKEN)
 
+# Build the sandbox image (required for secure AI code execution)
+cd backend
+docker build -t forge-aider-sandbox:latest -f Dockerfile.sandbox .
+cd ..
+
 # Start everything
 docker-compose up -d
 
@@ -60,7 +66,7 @@ python -m venv .venv && source .venv/bin/activate  # or .venv\Scripts\activate o
 pip install -e ".[dev]"
 cp .env.example .env  # Edit with your keys
 
-# Run tests (1,240+ tests, ~5 minutes)
+# Run tests (1,280+ tests, ~5 minutes)
 pytest
 
 # Start the server
@@ -113,15 +119,19 @@ forge/
 ├── backend/
 │   ├── app/
 │   │   ├── api/               # REST + WebSocket endpoints + auth
-│   │   ├── adapters/          # OpenRouter, GitHub VCS, Aider tool
+│   │   ├── adapters/          # OpenRouter, GitHub VCS, Aider, Sandboxed Aider
 │   │   ├── workflow/          # LangGraph state machine (13 nodes)
-│   │   ├── runtime/           # Core logic (27 modules, 1,240+ tests)
+│   │   ├── runtime/           # Core logic (27 modules, 1,280+ tests)
+│   │   │   ├── verification/  # scope_check.py (pre-commit security)
+│   │   │   └── workspace/     # Isolated workspaces with hard limits
 │   │   └── db/               # PostgreSQL stores (asyncpg)
 │   ├── alembic/              # Database migrations
 │   ├── config/               # YAML configuration
 │   ├── tests/                # Unit + property-based tests
-│   ├── Dockerfile
+│   ├── Dockerfile            # Backend image
+│   ├── Dockerfile.sandbox    # Aider sandbox image
 │   └── main.py               # uvicorn entry point
+├── docs/                      # 12 documentation files
 ├── docker-compose.yml         # PostgreSQL + Forge API
 └── .env.docker               # Docker environment template
 ```
@@ -146,6 +156,7 @@ Each node delegates to an existing runtime component. Conditional routing handle
 | OpenRouter | openrouter.ai | AI completions (all models via single API) |
 | GitHub VCS | github.com | Clone, commit, push (token auth) |
 | Aider | aider CLI | Coding tool (subprocess with timeout) |
+| Sandboxed Aider | Docker + aider | Coding tool in isolated container (recommended) |
 
 ## API
 
@@ -185,12 +196,13 @@ Auth: `Authorization: Bearer <FORGE_API_TOKEN>` on all endpoints.
 | `DATABASE_URL` | For Docker | PostgreSQL connection string |
 | `FORGE_API_TOKEN` | Yes | Bearer token for API auth |
 | `AIDER_MODEL` | No | Model for Aider (default: claude-sonnet-4-20250514) |
+| `FORGE_USE_SANDBOX` | No | Sandbox mode: `auto` (default), `always`, `never` |
 
 ## Testing
 
 ```bash
 cd backend
-pytest                    # Full suite (1,240+ tests)
+pytest                    # Full suite (1,280+ tests)
 pytest -x                 # Stop on first failure
 pytest tests/test_api.py  # Specific module
 pytest -k "properties"    # Property-based tests only
@@ -202,7 +214,9 @@ pytest -k "properties"    # Property-based tests only
 - **Circuit breaker per AI provider** — dead providers ejected in milliseconds
 - **Secrets never persisted** — redacted at every serialization boundary
 - **Deterministic intent classification** — "stop" never depends on AI being reachable
-- **Workspace isolation** — each task runs in a sandboxed copy, never touches canonical repo
+- **Workspace sandboxing** — each task runs in a Docker container with `--network none`, no host access, resource limits, and read-only rootfs. Only `OPENROUTER_API_KEY` reaches the sandbox.
+- **Pre-commit scope check** — AI changes to CI pipelines, secrets, Docker configs, and env files are blocked before commit
+- **Diff audit trail** — every AI-generated change is captured as a git diff and recorded in the audit log
 
 ## License
 
