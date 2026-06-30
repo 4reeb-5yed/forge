@@ -1,0 +1,21 @@
+# Rate Limiting Configuration
+# Per-session and per-provider rate/budget limits.
+
+session:
+  # Maximum token budget per session
+  max_tokens: 1000000
+  # Maximum cost budget per session (USD)
+  max_cost_usd: 50.00
+
+providers:
+  openai:
+    requests_per_minute: 60
+    tokens_per_minute: 150000
+
+  anthropic:
+    requests_per_minute: 50
+    tokens_per_minute: 100000
+
+global:
+  # Maximum concurrent model calls across all sessions
+  max_concurrent_calls: 10

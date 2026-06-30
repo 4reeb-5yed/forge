@@ -1,0 +1,37 @@
+# Policy Engine Rules Configuration
+# Determines retry/escalate/skip decisions on verification failure.
+
+retry_budget:
+  max_retries_per_task: 3
+
+escalation:
+  # Number of consecutive tool failures before escalating to alternate coding tool
+  failure_threshold: 2
+
+rules:
+  - on: verification_failure
+    stage: tests
+    decision: retry
+    max_attempts: 3
+
+  - on: verification_failure
+    stage: lint
+    decision: retry
+    max_attempts: 2
+
+  - on: verification_failure
+    stage: type_check
+    decision: retry
+    max_attempts: 2
+
+  - on: verification_failure
+    stage: security
+    decision: skip
+    max_attempts: 1
+
+  - on: tool_failure
+    decision: escalate
+    threshold: 2
+
+  - on: budget_exceeded
+    decision: skip

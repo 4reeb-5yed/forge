@@ -1,0 +1,31 @@
+# Verification Pipeline Stage Configuration
+# Defines advisory (concurrent, non-blocking) and blocking (sequential, gating) stages.
+
+stages:
+  advisory:
+    - name: lint
+      timeout_s: 60
+      command: "ruff check ."
+
+    - name: type_check
+      timeout_s: 120
+      command: "pyright"
+
+    - name: security
+      timeout_s: 90
+      command: "bandit -r ."
+
+  blocking:
+    - name: tests
+      timeout_s: 300
+      command: "pytest --tb=short"
+      order: 1
+
+    - name: llm_review
+      timeout_s: 120
+      role: reviewer
+      order: 2
+
+defaults:
+  advisory_timeout_s: 60
+  blocking_timeout_s: 300

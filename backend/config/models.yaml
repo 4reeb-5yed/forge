@@ -1,0 +1,63 @@
+# AI Provider and Model Configuration
+# Maps roles to ordered provider chains for the Model Router.
+
+roles:
+  clarification:
+    chain:
+      - provider: openai
+        model: gpt-4o
+      - provider: anthropic
+        model: claude-sonnet-4-20250514
+
+  architect:
+    chain:
+      - provider: anthropic
+        model: claude-sonnet-4-20250514
+      - provider: openai
+        model: gpt-4o
+
+  planner:
+    chain:
+      - provider: anthropic
+        model: claude-sonnet-4-20250514
+      - provider: openai
+        model: gpt-4o
+
+  coder:
+    chain:
+      - provider: anthropic
+        model: claude-sonnet-4-20250514
+      - provider: openai
+        model: gpt-4o
+
+  reviewer:
+    chain:
+      - provider: anthropic
+        model: claude-sonnet-4-20250514
+      - provider: openai
+        model: gpt-4o
+
+  doc_writer:
+    chain:
+      - provider: openai
+        model: gpt-4o
+      - provider: anthropic
+        model: claude-sonnet-4-20250514
+
+  interrupt_handler:
+    chain:
+      - provider: openai
+        model: gpt-4o-mini
+      - provider: anthropic
+        model: claude-sonnet-4-20250514
+
+providers:
+  openai:
+    base_url: "${OPENAI_API_BASE_URL}"
+    api_key_env: "OPENAI_API_KEY"
+    timeout_s: 60
+
+  anthropic:
+    base_url: "${ANTHROPIC_API_BASE_URL}"
+    api_key_env: "ANTHROPIC_API_KEY"
+    timeout_s: 60
