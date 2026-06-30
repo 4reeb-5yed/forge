@@ -76,6 +76,12 @@ class EventType(str, Enum):
     # Budget
     BUDGET_EXCEEDED = "budget.exceeded"
 
+    # Interrupt lifecycle
+    INTERRUPT_PAUSED = "interrupt.paused"
+    INTERRUPT_RESUMED = "interrupt.resumed"
+    INTERRUPT_STOPPED = "interrupt.stopped"
+    INTERRUPT_REDIRECTED = "interrupt.redirected"
+
 
 @dataclass(frozen=True)
 class Event:

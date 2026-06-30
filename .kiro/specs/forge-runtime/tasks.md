@@ -224,7 +224,7 @@ This plan implements the Forge autonomous software engineering runtime — a Pyt
     - Test empty answer rejection
     - _Requirements: 2.1–2.8, 3.1–3.6_
 
-- [ ] 9. Specification, Planning, and Task Dependency Graph
+- [x] 9. Specification, Planning, and Task Dependency Graph
   - [x] 9.1 Implement specification and task generation via Architect role
     - Invoke Architect role exactly once after clarification completes
     - Generate specification artifact and task list from Digital Twin + SessionContext
@@ -318,7 +318,7 @@ This plan implements the Forge autonomous software engineering runtime — a Pyt
 - [x] 13. Checkpoint - Ensure workspace, verification, and policy tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 14. Commit, Finalization, and Documentation
+- [x] 14. Commit, Finalization, and Documentation
   - [x] 14.1 Implement commit workflow with approval gates
     - Commit task changes from workspace to canonical repo on `verify.passed`
     - Emit `commit.done` with commit SHA and changed file paths
@@ -334,7 +334,7 @@ This plan implements the Forge autonomous software engineering runtime — a Pyt
     - Handle approval timeout/rejection: do not perform action, emit event
     - _Requirements: 9.3, 9.6, 9.7_
 
-  - [-] 14.3 Implement Digital Twin diff and documentation maintenance
+  - [x] 14.3 Implement Digital Twin diff and documentation maintenance
     - Compute twin diff (modules added/changed/removed) on `commit.done`
     - DocWriter updates README and `docs` files; emits `doc_updated` event
     - On DocWriter failure: leave file unchanged, record drift entry, emit event
@@ -343,19 +343,19 @@ This plan implements the Forge autonomous software engineering runtime — a Pyt
     - Skip files already matching twin in document mode
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6_
 
-  - [-] 14.4 Write property test for documentation non-drift (Hypothesis)
+  - [x] 14.4 Write property test for documentation non-drift (Hypothesis)
     - **Property 10: Documentation non-drift** — after finalize, for every module changed in twin diff, either docs were updated or a DocDrift entry is recorded
     - **Validates: Requirements 10.1, 10.2, 10.3, 10.4**
 
-  - [-] 14.5 Write unit tests for commit, finalization, and documentation
+  - [x] 14.5 Write unit tests for commit, finalization, and documentation
     - Test commit on verify.passed and rejection without it
     - Test approval gate pause and timeout behavior
     - Test twin diff computation and doc update
     - Test drift recording on DocWriter failure
     - _Requirements: 9.1–9.7, 10.1–10.6_
 
-- [ ] 15. Runtime Inspector and Crash Recovery
-  - [~] 15.1 Implement the RuntimeInspector as a query-only facade
+- [x] 15. Runtime Inspector and Crash Recovery
+  - [x] 15.1 Implement the RuntimeInspector as a query-only facade
     - Return current node, worker status, task queue, active task from runtime state (within 2s)
     - Return empty active task and empty queue when no build in progress
     - Return most recent DecisionRecord for session (kind, subject, inputs, decision, rationale, alternatives)
@@ -364,7 +364,7 @@ This plan implements the Forge autonomous software engineering runtime — a Pyt
     - Derive all responses from runtime state, AuditTrail, and CapabilityRegistry only (no AI)
     - _Requirements: 20.1, 20.2, 20.3, 20.4, 20.5, 20.6, 20.7_
 
-  - [~] 15.2 Implement crash recovery and resume workflow
+  - [x] 15.2 Implement crash recovery and resume workflow
     - Checkpoint redacted ForgeState, completed node ID, and highest seq to relational store after each node
     - Halt on checkpoint write failure; emit error; do not advance
     - On restart: identify sessions with non-terminal checkpoint; resume from last completed node
@@ -373,19 +373,19 @@ This plan implements the Forge autonomous software engineering runtime — a Pyt
     - Send state snapshot + retained events if client's last seq precedes oldest retained event
     - _Requirements: 21.1, 21.2, 21.3, 21.4, 21.5, 21.6_
 
-  - [~] 15.3 Write property test for explainability without inference (Hypothesis)
+  - [x] 15.3 Write property test for explainability without inference (Hypothesis)
     - **Property 8: Explainability without inference** — every explain and runtime response is derived solely from structured state (audit trail, registry, ForgeState); no LLM invoked
     - **Validates: Requirements 20.7, 12.5**
 
-  - [~] 15.4 Write unit tests for RuntimeInspector and crash recovery
+  - [x] 15.4 Write unit tests for RuntimeInspector and crash recovery
     - Test inspector responses with and without active builds
     - Test DecisionRecord retrieval and not-found cases
     - Test checkpoint persistence and resume on restart
     - Test workspace destruction on crash recovery
     - _Requirements: 20.1–20.7, 21.1–21.6_
 
-- [ ] 16. Interrupt Handling and Outcome Recording
-  - [~] 16.1 Implement interrupt, pause, resume, redirect, and stop
+- [x] 16. Interrupt Handling and Outcome Recording
+  - [x] 16.1 Implement interrupt, pause, resume, redirect, and stop
     - Pause execution within 2 seconds of interrupt; retain all build state
     - Surface interrupt message to developer within 2 seconds of pausing
     - Resume from paused point using retained state; emit `interrupt.resumed` within 2s
@@ -395,7 +395,7 @@ This plan implements the Forge autonomous software engineering runtime — a Pyt
     - Cancel in-flight model backoff within 2 seconds on stop/interrupt
     - _Requirements: 24.1, 24.2, 24.3, 24.4, 24.5, 24.6, 24.7_
 
-  - [~] 16.2 Implement the LearningRecorder for build outcome recording
+  - [x] 16.2 Implement the LearningRecorder for build outcome recording
     - Record one outcome entry per executed task on build finalize
     - Entry includes: task type, tool, model, role, outcome status (success/failure), retry count, escalation flag
     - Persist entries to relational store
@@ -404,18 +404,18 @@ This plan implements the Forge autonomous software engineering runtime — a Pyt
     - Never apply recommendations automatically
     - _Requirements: 25.1, 25.2, 25.3, 25.4, 25.5_
 
-  - [~] 16.3 Write unit tests for interrupt handling and outcome recording
+  - [x] 16.3 Write unit tests for interrupt handling and outcome recording
     - Test pause/resume/redirect/stop flows
     - Test timing constraints (2-second response)
     - Test outcome recording with success and failure statuses
     - Test recording failure handling
     - _Requirements: 24.1–24.7, 25.1–25.5_
 
-- [~] 17. Checkpoint - Ensure inspector, recovery, interrupts, and recording tests pass
+- [x] 17. Checkpoint - Ensure inspector, recovery, interrupts, and recording tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 18. API Endpoints and Layer Boundaries
-  - [~] 18.1 Implement REST and WebSocket endpoints
+- [x] 18. API Endpoints and Layer Boundaries
+  - [x] 18.1 Implement REST and WebSocket endpoints
     - Session management endpoints (CRUD)
     - Messaging endpoint for developer messages
     - Artifact retrieval endpoints
@@ -426,13 +426,13 @@ This plan implements the Forge autonomous software engineering runtime — a Pyt
     - Serve explain/runtime responses from RuntimeInspector only (no AI)
     - _Requirements: 26.1, 26.2, 26.3, 26.4_
 
-  - [~] 18.2 Implement authentication and authorization
+  - [x] 18.2 Implement authentication and authorization
     - Require valid auth credentials on all endpoints and WebSocket streams
     - Reject requests with missing/invalid credentials with authentication-failure response
     - Do not perform requested operation on auth failure
     - _Requirements: 26.5, 26.6_
 
-  - [~] 18.3 Implement and enforce layer boundary checks
+  - [x] 18.3 Implement and enforce layer boundary checks
     - Verify module imports target own layer or exactly one adjacent layer
     - Presentation layer: only runtime API + event catalog, no orchestration logic
     - Application layer: transport translation only, no engineering logic
@@ -441,14 +441,14 @@ This plan implements the Forge autonomous software engineering runtime — a Pyt
     - Fail boundary check with error identifying offending import path
     - _Requirements: 23.1, 23.2, 23.3, 23.4, 23.5, 23.6_
 
-  - [~] 18.4 Write unit tests for API endpoints and layer boundaries
+  - [x] 18.4 Write unit tests for API endpoints and layer boundaries
     - Test REST endpoint responses for valid/invalid requests
     - Test WebSocket stream ordering and rejection
     - Test authentication enforcement
     - Test layer boundary violation detection
     - _Requirements: 26.1–26.6, 23.1–23.6_
 
-- [~] 19. Final Checkpoint - Full integration verification
+- [x] 19. Final Checkpoint - Full integration verification
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

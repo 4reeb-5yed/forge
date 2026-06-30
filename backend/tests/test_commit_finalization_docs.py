@@ -655,7 +655,7 @@ class TestCommitToDocIntegration:
         event_emitter: FakeEventEmitter,
     ) -> None:
         """Req 9.1 + 10.1 + 10.2: commit.done triggers diff then doc update."""
-        diff = await doc_maintenance.on_commit_done(
+        diff, new_drift = await doc_maintenance.on_commit_done(
             commit_sha="abc123",
             changed_files=["src/new_feature.py", "src/utils.py"],
         )
@@ -696,7 +696,7 @@ class TestCommitToDocIntegration:
             session_id="session-1",
         )
 
-        diff = await maintenance.on_commit_done(
+        diff, new_drift = await maintenance.on_commit_done(
             commit_sha="abc123",
             changed_files=["src/module.py"],
         )
@@ -718,7 +718,7 @@ class TestCommitToDocIntegration:
             session_id="session-1",
         )
 
-        await maintenance.on_commit_done(
+        diff, new_drift = await maintenance.on_commit_done(
             commit_sha="abc123",
             changed_files=["src/module.py"],
         )
