@@ -36,7 +36,7 @@ forge/
 │   │   └── StatusBar.tsx                          # Runtime status + controls
 │   ├── lib/
 │   │   └── api.ts                                 # API client (REST + WebSocket)
-│   ├── next.config.ts                             # API rewrites to backend
+│   ├── next.config.js                              # API rewrites to backend
 │   ├── package.json                               # Dependencies
 │   ├── postcss.config.mjs                         # PostCSS for Tailwind
 │   ├── tailwind.config.ts                         # Dark theme colors
