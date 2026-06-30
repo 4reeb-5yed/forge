@@ -1,0 +1,23 @@
+# Forge Aider Sandbox — minimal image for isolated code execution
+# Build: docker build -t forge-aider-sandbox:latest -f Dockerfile.sandbox .
+
+FROM python:3.11-slim
+
+# Install Aider and git (Aider needs git for diff operations)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git && \
+    rm -rf /var/lib/apt/lists/* && \
+    pip install --no-cache-dir aider-chat
+
+# Create non-root user (uid 1000)
+RUN useradd -m -u 1000 -s /bin/bash sandbox
+
+# Switch to non-root user
+USER sandbox
+
+# Working directory will be overridden by --workdir /workspace
+WORKDIR /workspace
+
+# Default entrypoint — overridden by docker run command
+ENTRYPOINT []
+CMD ["aider", "--help"]

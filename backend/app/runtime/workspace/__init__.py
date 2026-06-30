@@ -28,6 +28,20 @@ logger = logging.getLogger(__name__)
 # Default maximum workspace age in seconds before orphan reaping
 DEFAULT_MAX_WORKSPACE_AGE = 3600
 
+# Hard ceiling on concurrent active workspaces (prevents disk/container exhaustion)
+DEFAULT_MAX_CONCURRENT_WORKSPACES = 10
+
+
+class WorkspaceLimitExceededError(Exception):
+    """Raised when the maximum number of concurrent workspaces is reached."""
+
+    def __init__(self, current: int, limit: int) -> None:
+        self.current = current
+        self.limit = limit
+        super().__init__(
+            f"Maximum concurrent workspaces reached: {current}/{limit}. "
+            f"Wait for existing tasks to complete or increase the limit."
+        )
 
 class WorkspaceStatus(str, Enum):
     """Status of a managed workspace."""
@@ -132,23 +146,37 @@ class WorkspaceManager:
         task_id: str,
         session_id: str,
         base_ref: str = "main",
+        max_concurrent: int = DEFAULT_MAX_CONCURRENT_WORKSPACES,
     ) -> WorkspaceInfo:
         """Create a sandboxed workspace for a task.
 
         Creates a temporary directory representing the isolated workspace,
         records metadata, and emits a workspace.created event.
 
+        Enforces a hard ceiling on concurrent active workspaces to prevent
+        disk/container exhaustion.
+
         Args:
             task_id: The owning task's identifier.
             session_id: The session this workspace belongs to.
             base_ref: The repository ref to base the workspace on.
+            max_concurrent: Maximum number of concurrent workspaces allowed.
 
         Returns:
             WorkspaceInfo with the new workspace's metadata.
 
         Raises:
+            WorkspaceLimitExceededError: If max concurrent workspaces reached.
             WorkspaceCreationError: If workspace creation fails.
         """
+        # Enforce hard ceiling on concurrent active workspaces
+        active_count = sum(
+            1 for ws in self._workspaces.values()
+            if ws.status == WorkspaceStatus.ACTIVE
+        )
+        if active_count >= max_concurrent:
+            raise WorkspaceLimitExceededError(current=active_count, limit=max_concurrent)
+
         workspace_id = str(uuid.uuid4())
 
         try:
