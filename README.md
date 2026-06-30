@@ -4,6 +4,23 @@
 
 Forge is an autonomous software engineering runtime. Supply a GitHub repository URL and a plain-English goal — Forge plans, builds, reviews, verifies, and commits code, streaming every decision back in real time.
 
+## Documentation
+
+Comprehensive documentation lives in [`docs/`](./docs/README.md):
+
+| Doc | Description |
+|-----|-------------|
+| [Overview](./docs/01-OVERVIEW.md) | What Forge is, current status, tech stack |
+| [Architecture](./docs/02-ARCHITECTURE.md) | 6-layer design, event bus, data flow |
+| [Runtime Modules](./docs/03-RUNTIME-MODULES.md) | All 27 modules with APIs and events |
+| [Workflow](./docs/04-WORKFLOW.md) | LangGraph state machine, nodes, routing |
+| [Adapters](./docs/05-ADAPTERS.md) | OpenRouter, GitHub VCS, Aider |
+| [Database](./docs/06-DATABASE.md) | PostgreSQL schema, stores, migrations |
+| [Frontend](./docs/07-FRONTEND.md) | Next.js UI, components, WebSocket |
+| [Deployment](./docs/08-DEPLOYMENT.md) | Docker Compose, env vars, scaling |
+| [Testing](./docs/09-TESTING.md) | Test strategy, property-based testing |
+| [Future](./docs/10-FUTURE.md) | Roadmap, limitations, tradeoffs |
+
 ## What It Does
 
 ```
