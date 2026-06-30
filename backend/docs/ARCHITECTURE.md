@@ -76,3 +76,29 @@ The EventBus is the single source of truth. All projections (audit, WebSocket, l
 - State snapshots redacted before checkpoint persistence
 - Token references (not raw values) stored in session state
 - `redact_or_raise()` aborts if any raw secret survives redaction
+
+## LangGraph Workflow
+
+The workflow state machine drives `ForgeState` through ordered nodes:
+
+```
+intake → classify → [clarify → architect → plan → execute → verify → commit]* → doc_update → finalize
+                  ↘ status → END
+                  ↘ interrupt → END
+```
+
+**Conditional routing:**
+- After classify: routes by intent (build, status, interrupt)
+- After verify: routes by outcome (passed→commit, failed→policy)
+- After policy: always back to execute (retry/skip/escalate)
+- After commit: loops to execute if tasks remain, else doc_update
+
+**Bootstrap sequence:**
+1. Load and validate config YAML
+2. Discovery: probe all resources concurrently
+3. Register healthy capabilities in Registry
+4. Start Health Monitor background task
+5. Evaluate operational mode (OPERATIONAL/DEGRADED)
+6. Emit `forge.ready` event
+
+**Entry point:** `uvicorn main:app` → `create_app()` → lifespan runs bootstrap → graph compiled

@@ -35,7 +35,21 @@ Forge follows a strict 5-layer architecture with adjacent-only communication:
 
 ## Current Status
 
-The runtime core is fully implemented with **1,191 passing tests** covering all 26 requirements and 12 correctness properties. The system uses in-memory stores and mock adapters — ready for infrastructure wiring.
+The runtime core and LangGraph workflow are fully implemented with **1,240+ passing tests** covering all 26 requirements and 12 correctness properties. The system is runnable end-to-end with in-memory stores and mock adapters.
+
+**Runnable now:**
+```bash
+cd backend
+pip install -e ".[dev]"
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+Then invoke a build:
+```bash
+curl -X POST http://localhost:8000/workflow/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Build user authentication with JWT", "session_id": "demo-1"}'
+```
 
 ## Project Structure
 
@@ -44,6 +58,13 @@ backend/
 ├── app/
 │   ├── api/                    # Application Layer (FastAPI endpoints + auth)
 │   ├── adapters/               # Adapter Layer (plugin protocol stubs)
+│   ├── workflow/               # LangGraph Workflow (state machine wiring)
+│   │   ├── nodes/             # 13 node functions (intake → finalize)
+│   │   ├── routing.py         # Conditional edge routing functions
+│   │   ├── graph.py           # Graph builder (StateGraph construction)
+│   │   ├── bootstrap.py       # Startup sequence + assemble_deps()
+│   │   ├── deps.py            # RuntimeDeps container
+│   │   └── app.py             # FastAPI app factory with lifespan
 │   ├── runtime/                # Runtime Layer (all business logic)
 │   │   ├── events/             # EventBus, backpressure, event models
 │   │   ├── registry/           # Capability Registry
@@ -119,7 +140,24 @@ cd backend
 pytest
 ```
 
-All 1,191 tests should pass in ~4-5 minutes. Property-based tests use Hypothesis with 100-500 examples each.
+All 1,240+ tests should pass in ~5 minutes. Property-based tests use Hypothesis with 100-500 examples each.
+
+### Start the Server
+
+```bash
+cd backend
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Invoke a Build
+
+```bash
+curl -X POST http://localhost:8000/workflow/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Add user authentication with JWT", "session_id": "my-session"}'
+```
+
+The response includes the workflow status, commit SHAs, node path traversed, and any errors.
 
 ### Run Specific Test Groups
 
@@ -145,6 +183,8 @@ pytest tests/test_event_properties.py tests/test_discovery_properties.py \
 
 | Method | Path | Description |
 |--------|------|-------------|
+| POST | `/workflow/invoke` | **Run a full build workflow** |
+| GET | `/health` | Health check |
 | POST | `/sessions` | Create a build session |
 | GET | `/sessions` | List all sessions |
 | GET | `/sessions/{id}` | Get session detail |
