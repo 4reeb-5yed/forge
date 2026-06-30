@@ -5,8 +5,6 @@
 Forge ships with a `docker-compose.yml` that runs the full stack:
 
 ```yaml
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16-alpine

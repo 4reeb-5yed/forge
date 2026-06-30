@@ -28,7 +28,7 @@ frontend/
 │   └── StatusBar.tsx        # Runtime status + control buttons
 ├── lib/
 │   └── api.ts              # API client (REST + WebSocket)
-├── next.config.ts          # Next.js configuration (API rewrites)
+├── next.config.js          # Next.js configuration (API rewrites)
 ├── tailwind.config.ts      # Tailwind theme (forge-* colors)
 ├── tsconfig.json           # TypeScript configuration
 └── package.json
