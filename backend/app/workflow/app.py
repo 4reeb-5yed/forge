@@ -77,7 +77,8 @@ def create_app() -> FastAPI:
 
     Returns:
         A configured FastAPI app with lifespan management, the compiled
-        LangGraph workflow in app.state, and the /workflow/invoke endpoint.
+        LangGraph workflow in app.state, and all endpoints (sessions,
+        control, inspection, WebSocket, workflow invocation).
     """
     app = FastAPI(
         title="Forge Runtime",
@@ -85,6 +86,22 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=_lifespan,
     )
+
+    # ──────────────────────────────────────────────────────────────────
+    # Mount the sessions/control/inspection/WebSocket endpoints from the
+    # API layer. These are defined in app.api and include:
+    #   POST/GET /sessions, GET/DELETE /sessions/{id},
+    #   POST /sessions/{id}/interrupt|resume|redirect|stop,
+    #   GET /sessions/{id}/status|explain,
+    #   GET /capabilities,
+    #   WS /sessions/{id}/events
+    # ──────────────────────────────────────────────────────────────────
+    from app.api import create_app as create_api_app
+
+    api_app = create_api_app()
+    # Include all routes from the API app into this app
+    for route in api_app.routes:
+        app.routes.append(route)
 
     @app.post("/workflow/invoke", response_model=InvokeResponse)
     async def invoke_workflow(request: InvokeRequest) -> InvokeResponse:
