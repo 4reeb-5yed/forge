@@ -152,18 +152,43 @@ class ForgeState(TypedDict, total=False):
 
     Per design R4, large/growing objects (twin, audit log) are referenced
     by handle, not embedded. This keeps checkpoints small and cheap.
+
+    Extended for LangGraph graph routing with intent classification,
+    node path tracking, task ordering, and control flags.
     """
 
+    # Identity
     session_id: str
     status: str
     build_mode: Literal["new", "extend", "analyze", "document"]
+
+    # Workflow routing
+    intent: str  # classified intent: "build_intent", "status_query", "interrupt", "natural_language"
+    message: str  # incoming user message
+    node_path: list[str]  # breadcrumb of visited nodes (for checkpoint/resume)
+
+    # Planning & execution
     tasks: list[Task]
+    task_ordering: list[str]  # topological order from planner
+    current_task_index: int
     current_task_id: str | None
+
+    # References (not full objects — per design R4)
     digital_twin: str  # reference/handle into twin store
     session_context: str  # reference/handle into session context store
+    spec_artifact_uri: str  # URI in artifact store
+
+    # Results
     verification_results: dict[str, Any]
+    commit_shas: list[str]
     decisions: list[str]  # decision_ids referencing the audit trail
     errors: list[dict[str, Any]]
+    doc_updates: list[str]
+
+    # Control flags
+    needs_clarification: bool
+    all_tasks_done: bool
+    approval_pending: bool
 
 
 @dataclass
