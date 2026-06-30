@@ -11,6 +11,32 @@ from enum import Enum
 from typing import Any, Literal, TypedDict
 
 
+class BuildMode(str, Enum):
+    """The kind of build requested for a session.
+
+    new: Build new functionality from scratch.
+    extend: Extend existing functionality.
+    analyze: Analyze the repository without making changes.
+    document: Update documentation to match current code state.
+    """
+
+    NEW = "new"
+    EXTEND = "extend"
+    ANALYZE = "analyze"
+    DOCUMENT = "document"
+
+
+class OperationalMode(str, Enum):
+    """The runtime's operational mode.
+
+    OPERATIONAL: All minimum-required capabilities are met; builds are allowed.
+    DEGRADED: One or more required capabilities are missing; builds are refused.
+    """
+
+    OPERATIONAL = "operational"
+    DEGRADED = "degraded"
+
+
 class Capability(str, Enum):
     """Named, discoverable capabilities in the Forge Runtime.
 
@@ -94,6 +120,9 @@ class CapabilitySummary:
     available: dict[Capability, str] = field(default_factory=dict)  # capability -> status
     degraded: list[Capability] = field(default_factory=list)
     missing_required: list[Capability] = field(default_factory=list)
+    missing_reasons: dict[str, str] = field(default_factory=dict)  # capability/kind -> reason
+    soft_degradations: list[str] = field(default_factory=list)  # soft capability descriptions
+    mode: str = "degraded"  # "operational" or "degraded"
     can_operate: bool = False
 
 

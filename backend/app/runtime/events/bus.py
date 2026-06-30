@@ -6,6 +6,7 @@ Provides typed publish/subscribe with:
 - At-least-once delivery with retry (up to 5 attempts per subscriber)
 - Idempotency enforcement on (session_id, seq) pairs
 - In-memory event storage for replay
+- Per-subscriber bounded queues with streaming backpressure (Req 18.1–18.5)
 """
 
 from __future__ import annotations
@@ -17,6 +18,11 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
+from app.runtime.events.backpressure import (
+    DEFAULT_LIFECYCLE_TIMEOUT,
+    DEFAULT_MAX_DEPTH,
+    BackpressureQueue,
+)
 from app.runtime.events.models import Event, EventType
 
 logger = logging.getLogger(__name__)
@@ -34,6 +40,7 @@ class Subscriber:
     pattern: str
     handler: SubscriberHandler
     subscriber_id: str
+    queue: BackpressureQueue | None = None
 
 
 class EventBus:
@@ -42,9 +49,17 @@ class EventBus:
     All runtime occurrences are published as Events through this bus. The bus assigns
     monotonic per-session seq values, enforces idempotency, delivers to subscribers
     with at-least-once semantics, and stores events for replay.
+
+    Supports per-subscriber bounded queues with configurable backpressure:
+    - max_queue_depth: Maximum events buffered per subscriber (default 1000)
+    - lifecycle_timeout: Seconds to block producer for lifecycle events (default 5s)
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        max_queue_depth: int = DEFAULT_MAX_DEPTH,
+        lifecycle_timeout: float = DEFAULT_LIFECYCLE_TIMEOUT,
+    ) -> None:
         # Per-session seq counters and locks
         self._seq_counters: dict[str, int] = defaultdict(int)
         self._seq_locks: dict[str, asyncio.Lock] = {}
@@ -57,6 +72,10 @@ class EventBus:
 
         # Registered subscribers
         self._subscribers: list[Subscriber] = []
+
+        # Backpressure configuration
+        self._max_queue_depth = max_queue_depth
+        self._lifecycle_timeout = lifecycle_timeout
 
     def _get_lock(self, session_id: str) -> asyncio.Lock:
         """Get or create the asyncio.Lock for a given session."""
@@ -86,6 +105,10 @@ class EventBus:
 
         lock = self._get_lock(session_id)
         async with lock:
+            # Validate causation_id references valid prior event (inside lock
+            # so event storage is stable during check)
+            self._validate_causation(event, session_id)
+
             # If event already has a seq > 0, check idempotency
             if event.seq > 0:
                 key = (session_id, event.seq)
@@ -132,6 +155,8 @@ class EventBus:
 
         if not event.type:
             missing.append("type")
+        if event.payload is None:
+            missing.append("payload")
         if not (event.correlation_id or event.session_id):
             missing.append("correlation_id")
         if not event.source:
@@ -146,19 +171,73 @@ class EventBus:
                 f"Event missing required fields: {', '.join(missing)}"
             )
 
-    def subscribe(self, pattern: str, handler: SubscriberHandler, subscriber_id: str) -> None:
-        """Register a subscriber with a glob pattern.
+    def _validate_causation(self, event: Event, session_id: str) -> None:
+        """Validate causation_id references an event with smaller seq in the same session.
+
+        Root events (no prior cause) must have causation_id=None.
+        When causation_id is set, it must reference the event_id of an event
+        already published in the same session with a smaller seq.
+
+        Args:
+            event: The event to validate.
+            session_id: The resolved session/correlation ID.
+
+        Raises:
+            ValueError: If causation_id references a non-existent or invalid event.
+        """
+        if event.causation_id is None:
+            # Root event — no prior cause; valid per Requirement 17.5
+            return
+
+        # Check that causation_id references an existing event in the same session
+        # with a smaller seq
+        session_events = self._events.get(session_id, [])
+        for existing_event in session_events:
+            if existing_event.event_id == event.causation_id:
+                # Found the referenced event — it already has a seq assigned
+                # and by virtue of being in storage, its seq is smaller than
+                # whatever seq will be assigned to the new event
+                return
+
+        raise ValueError(
+            f"causation_id '{event.causation_id}' does not reference "
+            f"an event with smaller seq in session '{session_id}'"
+        )
+
+    def subscribe(
+        self,
+        pattern: str,
+        handler: SubscriberHandler,
+        subscriber_id: str,
+        max_queue_depth: int | None = None,
+        lifecycle_timeout: float | None = None,
+    ) -> None:
+        """Register a subscriber with a glob pattern and a bounded queue.
 
         The pattern is matched against EventType values (e.g., "capability.*",
         "*.done", "task.start").
+
+        Each subscriber gets its own BackpressureQueue with configurable depth.
 
         Args:
             pattern: Glob-style pattern to match against event type values.
             handler: Async callable invoked for each matching event.
             subscriber_id: Unique identifier for the subscriber.
+            max_queue_depth: Override max queue depth for this subscriber.
+            lifecycle_timeout: Override lifecycle timeout for this subscriber.
         """
+        queue = BackpressureQueue(
+            subscriber_id=subscriber_id,
+            max_depth=max_queue_depth or self._max_queue_depth,
+            lifecycle_timeout=lifecycle_timeout if lifecycle_timeout is not None else self._lifecycle_timeout,
+        )
         self._subscribers.append(
-            Subscriber(pattern=pattern, handler=handler, subscriber_id=subscriber_id)
+            Subscriber(
+                pattern=pattern,
+                handler=handler,
+                subscriber_id=subscriber_id,
+                queue=queue,
+            )
         )
 
     def unsubscribe(self, subscriber_id: str) -> None:
@@ -201,18 +280,31 @@ class EventBus:
         return fnmatch.fnmatch(event_type.value, pattern)
 
     async def _deliver(self, event: Event) -> None:
-        """Deliver an event to all matching subscribers with at-least-once retry.
+        """Deliver an event to all matching subscribers via their bounded queues.
 
-        Retries up to MAX_DELIVERY_ATTEMPTS times per subscriber on failure.
+        Events are enqueued into per-subscriber BackpressureQueues before delivery.
+        The queue handles dropping coalescible token events and blocking for lifecycle
+        events when the queue is full.
         """
         for subscriber in self._subscribers:
             if self._matches(subscriber.pattern, event.type):
-                await self._deliver_to_subscriber(event, subscriber)
+                if subscriber.queue is not None:
+                    # Enqueue through backpressure queue
+                    enqueued = await subscriber.queue.enqueue(event)
+                    if enqueued:
+                        # Process the event from queue (deliver immediately)
+                        await self._deliver_to_subscriber(event, subscriber)
+                    # If not enqueued (spilled or dropped), delivery is skipped
+                else:
+                    # No queue — direct delivery (fallback for legacy usage)
+                    await self._deliver_to_subscriber(event, subscriber)
 
     async def _deliver_to_subscriber(
         self, event: Event, subscriber: Subscriber
     ) -> None:
         """Deliver an event to a single subscriber with retry.
+
+        After successful delivery, dequeues the event from the subscriber's queue.
 
         Args:
             event: The event to deliver.
@@ -223,6 +315,9 @@ class EventBus:
         for attempt in range(1, MAX_DELIVERY_ATTEMPTS + 1):
             try:
                 await subscriber.handler(event)
+                # Successful delivery — remove from queue
+                if subscriber.queue is not None:
+                    subscriber.queue.dequeue()
                 return  # Success
             except Exception:
                 if attempt == MAX_DELIVERY_ATTEMPTS:
@@ -234,6 +329,9 @@ class EventBus:
                         session_id,
                         event.seq,
                     )
+                    # Remove from queue on permanent failure too
+                    if subscriber.queue is not None:
+                        subscriber.queue.dequeue()
                 else:
                     logger.warning(
                         "Delivery attempt %d/%d failed: subscriber=%s, "
@@ -270,3 +368,17 @@ class EventBus:
         self._published = {
             (sid, seq) for sid, seq in self._published if sid != session_id
         }
+
+    def get_subscriber_queue(self, subscriber_id: str) -> BackpressureQueue | None:
+        """Get the backpressure queue for a subscriber by ID.
+
+        Args:
+            subscriber_id: The subscriber whose queue to retrieve.
+
+        Returns:
+            The subscriber's BackpressureQueue, or None if not found.
+        """
+        for sub in self._subscribers:
+            if sub.subscriber_id == subscriber_id:
+                return sub.queue
+        return None

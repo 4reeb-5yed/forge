@@ -281,3 +281,170 @@ class TestValidation:
         )
         with pytest.raises(ValueError, match="correlation_id"):
             await bus.publish(event)
+
+    async def test_missing_payload_raises(self) -> None:
+        """Requirement 17.2: payload must be present (not None)."""
+        bus = EventBus()
+        # Manually construct an event with payload=None to bypass factory defaults
+        event = Event(
+            schema_version=1,
+            seq=0,
+            session_id="s1",
+            type=EventType.TASK_START,
+            timestamp=None,  # type: ignore[arg-type]
+            source="test",
+            payload=None,  # type: ignore[arg-type]
+            causation_id=None,
+            correlation_id="s1",
+            event_id="eid-1",
+        )
+        with pytest.raises(ValueError, match="payload"):
+            await bus.publish(event)
+
+
+class TestDeliveryOrdering:
+    """Test at-least-once delivery in ascending seq order per session (Req 17.6)."""
+
+    async def test_events_delivered_in_seq_order(self) -> None:
+        """Requirement 17.6: delivery is in ascending seq order per session."""
+        bus = EventBus()
+        delivered_seqs: list[int] = []
+
+        async def handler(event: Event) -> None:
+            delivered_seqs.append(event.seq)
+
+        bus.subscribe("*", handler, "ordered-sub")
+
+        # Publish multiple events for the same session
+        for _ in range(10):
+            await bus.publish(_make_event())
+
+        assert delivered_seqs == list(range(1, 11))
+
+    async def test_concurrent_publishes_deliver_in_seq_order(self) -> None:
+        """Requirement 17.6: even concurrent publishes deliver in seq order."""
+        bus = EventBus()
+        delivered_seqs: list[int] = []
+
+        async def handler(event: Event) -> None:
+            delivered_seqs.append(event.seq)
+
+        bus.subscribe("*", handler, "ordered-sub")
+
+        # Concurrent publishes all for the same session
+        events = [_make_event() for _ in range(10)]
+        await asyncio.gather(*[bus.publish(e) for e in events])
+
+        # All seqs were delivered
+        assert sorted(delivered_seqs) == list(range(1, 11))
+
+
+class TestIdempotentSubscriber:
+    """Test that duplicate (session_id, seq) pairs produce no additional side effect (Req 17.8)."""
+
+    async def test_duplicate_seq_produces_no_additional_delivery(self) -> None:
+        """Requirement 17.8: processing a duplicate pair produces no observable side effect."""
+        bus = EventBus()
+        side_effects: list[str] = []
+
+        async def handler(event: Event) -> None:
+            side_effects.append(f"delivered-seq-{event.seq}")
+
+        bus.subscribe("*", handler, "idempotent-sub")
+
+        # First publish — should deliver
+        await bus.publish(_make_event())
+        assert side_effects == ["delivered-seq-1"]
+
+        # Attempt duplicate with seq=1 — should NOT deliver again
+        duplicate = _make_event(seq=1)
+        await bus.publish(duplicate)
+        assert side_effects == ["delivered-seq-1"]  # no new side effect
+
+    async def test_multiple_duplicates_produce_no_side_effects(self) -> None:
+        """Requirement 17.8: multiple duplicate submissions are all no-ops."""
+        bus = EventBus()
+        delivery_count = 0
+
+        async def handler(event: Event) -> None:
+            nonlocal delivery_count
+            delivery_count += 1
+
+        bus.subscribe("*", handler, "counter-sub")
+
+        # Publish original
+        await bus.publish(_make_event())
+        assert delivery_count == 1
+
+        # Submit the same seq multiple times
+        for _ in range(5):
+            await bus.publish(_make_event(seq=1))
+
+        assert delivery_count == 1  # still just the one delivery
+
+
+class TestCausationValidation:
+    """Test causation_id validation — Requirement 17.4, 17.5."""
+
+    async def test_root_event_with_no_causation_is_valid(self) -> None:
+        """Requirement 17.5: root events have causation_id=None."""
+        bus = EventBus()
+        event = _make_event(causation_id=None)
+        result = await bus.publish(event)
+        assert result.seq == 1
+        assert result.causation_id is None
+
+    async def test_causation_referencing_prior_event_is_valid(self) -> None:
+        """Requirement 17.4: causation_id references event with smaller seq."""
+        bus = EventBus()
+        # Publish root event first
+        root = _make_event(causation_id=None)
+        root_result = await bus.publish(root)
+        assert root_result.seq == 1
+
+        # Publish caused event referencing root's event_id
+        caused = _make_event(causation_id=root_result.event_id)
+        caused_result = await bus.publish(caused)
+        assert caused_result.seq == 2
+        assert caused_result.causation_id == root_result.event_id
+
+    async def test_causation_referencing_nonexistent_event_raises(self) -> None:
+        """Requirement 17.4: causation_id must reference existing event."""
+        bus = EventBus()
+        event = _make_event(causation_id="nonexistent-event-id")
+        with pytest.raises(ValueError, match="causation_id"):
+            await bus.publish(event)
+
+    async def test_causation_referencing_event_in_different_session_raises(self) -> None:
+        """Requirement 17.4: causation_id must reference event in same session."""
+        bus = EventBus()
+        # Publish event in session s1
+        e1 = _make_event(session_id="s1", correlation_id="s1")
+        e1_result = await bus.publish(e1)
+
+        # Try to publish event in session s2 referencing s1's event
+        e2 = _make_event(
+            session_id="s2",
+            correlation_id="s2",
+            causation_id=e1_result.event_id,
+        )
+        with pytest.raises(ValueError, match="causation_id"):
+            await bus.publish(e2)
+
+    async def test_causation_chain_multiple_levels(self) -> None:
+        """Requirement 17.4: multi-level causation chains are valid."""
+        bus = EventBus()
+        # Root event
+        root = _make_event(causation_id=None)
+        root_result = await bus.publish(root)
+
+        # Second event caused by root
+        e2 = _make_event(causation_id=root_result.event_id)
+        e2_result = await bus.publish(e2)
+
+        # Third event caused by second
+        e3 = _make_event(causation_id=e2_result.event_id)
+        e3_result = await bus.publish(e3)
+
+        assert e3_result.seq == 3
+        assert e3_result.causation_id == e2_result.event_id

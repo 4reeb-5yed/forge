@@ -54,9 +54,15 @@ class EventType(str, Enum):
 
     # VCS operations
     COMMIT_DONE = "commit.done"
+    COMMIT_FAILED = "commit.failed"
+
+    # Approval gates
+    APPROVAL_PENDING = "approval.pending"
+    APPROVAL_REJECTED = "approval.rejected"
 
     # Documentation
     DOC_UPDATED = "doc_updated"
+    DOC_DRIFT = "doc_drift"
 
     # Boot and readiness
     FORGE_BOOT_DISCOVERY_COMPLETE = "forge.boot.discovery_complete"

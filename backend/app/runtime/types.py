@@ -126,3 +126,8 @@ class TwinDiff:
     files_modified: list[str] = field(default_factory=list)
     summary: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def has_changes(self) -> bool:
+        """True if this diff describes any changes."""
+        return bool(self.files_added or self.files_removed or self.files_modified)
