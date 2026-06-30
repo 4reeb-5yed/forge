@@ -229,6 +229,10 @@ def _create_coding_tool():
     Prefers SandboxedAiderTool (Docker container per task) when Docker
     is available. Falls back to direct AiderTool if Docker is not found.
 
+    IMPORTANT: In 'auto' mode, falling back to unsandboxed execution logs
+    a WARNING (not info) so operators notice the security gap. In 'always'
+    mode, missing Docker is a hard failure that prevents startup.
+
     Security: only OPENROUTER_API_KEY is passed to the sandbox.
     GITHUB_TOKEN and other secrets are never exposed to the coding tool.
     """
@@ -242,16 +246,38 @@ def _create_coding_tool():
         logger.info("Coding tool: AiderTool (sandbox disabled via FORGE_USE_SANDBOX=never)")
         return AiderTool()
 
-    if use_sandbox == "always" or (use_sandbox == "auto" and shutil.which("docker")):
+    docker_available = shutil.which("docker") is not None
+
+    if use_sandbox == "always":
+        if not docker_available:
+            raise RuntimeError(
+                "FORGE_USE_SANDBOX=always but 'docker' CLI not found on PATH. "
+                "Install Docker CLI in the container (see Dockerfile) and mount "
+                "/var/run/docker.sock (see docker-compose.yml). "
+                "Refusing to start without sandbox."
+            )
         from app.adapters.sandboxed_aider import SandboxedAiderTool
-        logger.info("Coding tool: SandboxedAiderTool (Docker sandbox enabled)")
+        logger.info("Coding tool: SandboxedAiderTool (FORGE_USE_SANDBOX=always)")
         return SandboxedAiderTool(
             openrouter_api_key=os.environ.get("OPENROUTER_API_KEY", ""),
         )
 
-    # Fallback: Docker not available
+    # auto mode
+    if docker_available:
+        from app.adapters.sandboxed_aider import SandboxedAiderTool
+        logger.info("Coding tool: SandboxedAiderTool (Docker detected)")
+        return SandboxedAiderTool(
+            openrouter_api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+        )
+
+    # Fallback: Docker not available — this is a security gap, make it loud
     from app.adapters.aider_tool import AiderTool
-    logger.info("Coding tool: AiderTool (Docker not found, sandbox unavailable)")
+    logger.warning(
+        "⚠️  SECURITY: Docker not found — falling back to UNSANDBOXED AiderTool. "
+        "AI-generated code will execute with full host privileges. "
+        "Install Docker and mount /var/run/docker.sock to enable sandboxing, "
+        "or set FORGE_USE_SANDBOX=always to make this a hard failure."
+    )
     return AiderTool()
 
 

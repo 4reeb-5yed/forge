@@ -30,6 +30,15 @@ services:
         condition: service_healthy
     volumes:
       - workspaces:/tmp/forge-workspaces
+      # Docker socket mount — allows forge-api to spawn sandbox containers
+      # This is required for SandboxedAiderTool to function.
+      # The sandbox containers themselves have no socket access (--network none, no mounts).
+      - /var/run/docker.sock:/var/run/docker.sock
+    # The forge-api process needs group access to the Docker socket.
+    # On most Linux hosts, docker.sock is owned by root:docker (gid 999 or 998).
+    # Adjust the group_add value if your host uses a different docker GID.
+    group_add:
+      - "999"
 
 volumes:
   pgdata:
