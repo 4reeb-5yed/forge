@@ -95,6 +95,12 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
     Uses in-memory stores (no external databases required). Returns a fully
     assembled dependency container ready for bootstrap and graph construction.
 
+    Security notes:
+    - GITHUB_TOKEN is NOT passed to AiderTool or workspace environment.
+      It is only used by GitHubVCS adapter for clone/push operations (separate path).
+    - OPENROUTER_API_KEY is the only secret passed to the sandbox (Aider needs it).
+    - SandboxedAiderTool is used by default when Docker is available.
+
     Args:
         config_dir: Path to the configuration directory (default "config").
 
@@ -167,6 +173,12 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
     # Workspace management
     workspace_manager = WorkspaceManager(event_bus=event_bus)
 
+    # Coding tool — prefer sandboxed version when Docker is available
+    # NOTE: GITHUB_TOKEN is intentionally NOT passed to the coding tool.
+    # The coding tool only receives OPENROUTER_API_KEY (for AI model calls).
+    # VCS operations (clone/push) use GitHubVCS adapter on a separate path.
+    coding_tool = _create_coding_tool()
+
     # Inspection & control
     inspector = RuntimeInspector(
         audit_trail=audit_trail,
@@ -209,6 +221,38 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
         health_monitor=health_monitor,
         config_dir=config_dir,
     )
+
+
+def _create_coding_tool():
+    """Create the appropriate coding tool based on Docker availability.
+
+    Prefers SandboxedAiderTool (Docker container per task) when Docker
+    is available. Falls back to direct AiderTool if Docker is not found.
+
+    Security: only OPENROUTER_API_KEY is passed to the sandbox.
+    GITHUB_TOKEN and other secrets are never exposed to the coding tool.
+    """
+    import os
+    import shutil
+
+    use_sandbox = os.environ.get("FORGE_USE_SANDBOX", "auto")
+
+    if use_sandbox == "never":
+        from app.adapters.aider_tool import AiderTool
+        logger.info("Coding tool: AiderTool (sandbox disabled via FORGE_USE_SANDBOX=never)")
+        return AiderTool()
+
+    if use_sandbox == "always" or (use_sandbox == "auto" and shutil.which("docker")):
+        from app.adapters.sandboxed_aider import SandboxedAiderTool
+        logger.info("Coding tool: SandboxedAiderTool (Docker sandbox enabled)")
+        return SandboxedAiderTool(
+            openrouter_api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+        )
+
+    # Fallback: Docker not available
+    from app.adapters.aider_tool import AiderTool
+    logger.info("Coding tool: AiderTool (Docker not found, sandbox unavailable)")
+    return AiderTool()
 
 
 async def _noop_call_adapter(provider: str, model: str, messages: list, **kwargs) -> str:

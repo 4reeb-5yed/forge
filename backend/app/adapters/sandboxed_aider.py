@@ -101,12 +101,16 @@ class SandboxedAiderTool:
         - Only receives OPENROUTER_API_KEY (for AI model calls)
         - Is killed and removed after timeout or completion
 
+        After execution, captures the git diff produced by Aider for audit
+        purposes. The diff is included in the ToolResult output for the
+        audit trail to record.
+
         Args:
             task_description: Natural language description of the coding task.
             workspace_path: Host path to the workspace directory.
 
         Returns:
-            ToolResult with success status, output, and error.
+            ToolResult with success status, output (includes diff), and error.
         """
         container_name = f"forge-task-{os.urandom(4).hex()}"
 
@@ -152,6 +156,17 @@ class SandboxedAiderTool:
                     proc.returncode,
                     workspace_path,
                 )
+
+            # ─── Capture git diff for audit logging ───────────────────────
+            diff_output = await self._capture_workspace_diff(workspace_path)
+            if diff_output:
+                # Prepend diff to output for audit trail visibility
+                audit_section = (
+                    "\n--- WORKSPACE DIFF (post-execution) ---\n"
+                    f"{diff_output}\n"
+                    "--- END DIFF ---\n"
+                )
+                stdout = stdout + audit_section
 
             return ToolResult(
                 success=success,
@@ -242,6 +257,59 @@ class SandboxedAiderTool:
             await asyncio.wait_for(proc.wait(), timeout=10)
         except Exception:
             pass  # Best-effort cleanup
+
+    async def _capture_workspace_diff(self, workspace_path: str) -> str:
+        """Capture the git diff in the workspace after Aider execution.
+
+        Returns the diff output (truncated to 50KB for audit storage limits),
+        or empty string if git is unavailable or workspace has no changes.
+        """
+        MAX_DIFF_SIZE = 50_000  # 50KB cap to prevent audit bloat
+
+        try:
+            # First try staged changes
+            proc = await asyncio.create_subprocess_exec(
+                "git", "diff", "--stat",
+                cwd=workspace_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stat_bytes, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+            stat_output = stat_bytes.decode("utf-8", errors="replace").strip()
+
+            if not stat_output:
+                # Check untracked files
+                proc = await asyncio.create_subprocess_exec(
+                    "git", "ls-files", "--others", "--exclude-standard",
+                    cwd=workspace_path,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                untracked_bytes, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+                untracked = untracked_bytes.decode("utf-8", errors="replace").strip()
+                if untracked:
+                    return f"[Untracked files]\n{untracked}"
+                return ""
+
+            # Get the actual diff content
+            proc = await asyncio.create_subprocess_exec(
+                "git", "diff",
+                cwd=workspace_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            diff_bytes, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
+            diff_output = diff_bytes.decode("utf-8", errors="replace")
+
+            # Truncate if too large
+            if len(diff_output) > MAX_DIFF_SIZE:
+                diff_output = diff_output[:MAX_DIFF_SIZE] + "\n... [truncated, full diff exceeds 50KB]"
+
+            return diff_output
+
+        except (FileNotFoundError, asyncio.TimeoutError, Exception) as exc:
+            logger.debug("Failed to capture workspace diff: %s", exc)
+            return ""
 
     async def health_check(self) -> Health:
         """Check that Docker is available and the sandbox image exists.

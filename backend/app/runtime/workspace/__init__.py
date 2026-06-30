@@ -146,23 +146,37 @@ class WorkspaceManager:
         task_id: str,
         session_id: str,
         base_ref: str = "main",
+        max_concurrent: int = DEFAULT_MAX_CONCURRENT_WORKSPACES,
     ) -> WorkspaceInfo:
         """Create a sandboxed workspace for a task.
 
         Creates a temporary directory representing the isolated workspace,
         records metadata, and emits a workspace.created event.
 
+        Enforces a hard ceiling on concurrent active workspaces to prevent
+        disk/container exhaustion.
+
         Args:
             task_id: The owning task's identifier.
             session_id: The session this workspace belongs to.
             base_ref: The repository ref to base the workspace on.
+            max_concurrent: Maximum number of concurrent workspaces allowed.
 
         Returns:
             WorkspaceInfo with the new workspace's metadata.
 
         Raises:
+            WorkspaceLimitExceededError: If max concurrent workspaces reached.
             WorkspaceCreationError: If workspace creation fails.
         """
+        # Enforce hard ceiling on concurrent active workspaces
+        active_count = sum(
+            1 for ws in self._workspaces.values()
+            if ws.status == WorkspaceStatus.ACTIVE
+        )
+        if active_count >= max_concurrent:
+            raise WorkspaceLimitExceededError(current=active_count, limit=max_concurrent)
+
         workspace_id = str(uuid.uuid4())
 
         try:
