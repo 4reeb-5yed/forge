@@ -261,11 +261,20 @@ def create_app() -> FastAPI:
                 detail="Workflow graph not available. LangGraph may not be installed.",
             )
 
+        # Get repo_url from request or fetch from session
+        repo_url = request.repo_url
+        if not repo_url and request.session_id:
+            # Fetch session to get repo_url if not provided in request
+            deps = app.state.deps
+            session = deps.session_manager.get_session(request.session_id)
+            if session and session.repo_url:
+                repo_url = session.repo_url
+
         initial_state: ForgeState = {
             "session_id": request.session_id,
             "message": request.message,
             "build_mode": request.build_mode,  # type: ignore[typeddict-item]
-            "repo_url": request.repo_url,
+            "repo_url": repo_url,
             "status": "received",
             "tasks": [],
             "errors": [],
