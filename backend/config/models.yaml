@@ -5,37 +5,37 @@ roles:
   clarification:
     chain:
       - provider: openrouter
-        model: nvidia/nemotron-3-ultra-550b-a55b:free
+        model: anthropic/claude-3-haiku
 
   architect:
     chain:
       - provider: openrouter
-        model: nvidia/nemotron-3-ultra-550b-a55b:free
+        model: anthropic/claude-3-haiku
 
   planner:
     chain:
       - provider: openrouter
-        model: nvidia/nemotron-3-ultra-550b-a55b:free
+        model: anthropic/claude-3-haiku
 
   coder:
     chain:
       - provider: openrouter
-        model: nvidia/nemotron-3-ultra-550b-a55b:free
+        model: anthropic/claude-3-haiku
 
   reviewer:
     chain:
       - provider: openrouter
-        model: nvidia/nemotron-3-ultra-550b-a55b:free
+        model: anthropic/claude-3-haiku
 
   doc_writer:
     chain:
       - provider: openrouter
-        model: nvidia/nemotron-3-ultra-550b-a55b:free
+        model: anthropic/claude-3-haiku
 
   interrupt_handler:
     chain:
       - provider: openrouter
-        model: nvidia/nemotron-3-ultra-550b-a55b:free
+        model: anthropic/claude-3-haiku
 
 providers:
   openrouter:

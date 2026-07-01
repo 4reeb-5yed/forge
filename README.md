@@ -23,6 +23,7 @@ Comprehensive documentation lives in [`docs/`](./docs/README.md):
 | [Testing](./docs/09-TESTING.md) | Test strategy, property-based testing |
 | [Future](./docs/10-FUTURE.md) | Roadmap, limitations, tradeoffs |
 | [Security](./docs/12-SECURITY.md) | Workspace sandboxing, scope checks, secret isolation |
+| [Troubleshooting](./docs/13-TROUBLESHOOTING.md) | Common issues, solutions, and debugging tips |
 
 ## What It Does
 
@@ -276,7 +277,7 @@ Auth: `Authorization: Bearer <FORGE_API_TOKEN>` on all endpoints.
 | `FORGE_API_TOKEN` | Yes | Bearer token for API auth |
 | `FORGE_AUTH_DISABLED` | No | Set `true` to disable auth (development only) |
 | `AIDER_MODEL` | No | Model for Aider subprocess (default: claude-sonnet-4-20250514) |
-| `FORGE_MODEL` | No | AI model for workflow (default: nvidia/nemotron-3-ultra-550b-a55b:free) |
+| `FORGE_MODEL` | No | AI model for workflow. **Recommended:** `anthropic/claude-3-haiku` (free tier models like `nvidia/nemotron-3-ultra-550b-a55b:free` have strict rate limits) |
 | `FORGE_USE_SANDBOX` | No | Sandbox mode: `always` (recommended), `auto`, `never` |
 | `FORGE_BUILD_TIMEOUT_SECONDS` | No | Build timeout (default: 1800 = 30 minutes) |
 | `FORGE_MAX_CONCURRENT` | No | Max concurrent builds (default: 3) |

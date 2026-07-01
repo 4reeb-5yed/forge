@@ -452,7 +452,7 @@ def _create_default_chain_config() -> RoleChainConfig:
     from app.runtime.router import ChainEntry, Role, RoleChainConfig
 
     default_model = os.environ.get(
-        "FORGE_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free"
+        "FORGE_MODEL", "anthropic/claude-3-haiku"
     )
     return RoleChainConfig(chains={
         Role.CLARIFICATION: [ChainEntry(provider="openrouter", model=default_model)],
