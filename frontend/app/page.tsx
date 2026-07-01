@@ -10,6 +10,7 @@ import StatusBar from "@/components/StatusBar";
 import ErrorToast from "@/components/ErrorToast";
 import ErrorPanel from "@/components/ErrorPanel";
 import SetupBanner from "@/components/SetupBanner";
+import { ApprovalBanner } from "@/components/ApprovalBanner";
 import { useHealthPolling } from "@/lib/health";
 import { addError } from "@/lib/error-store";
 import {
@@ -40,6 +41,7 @@ export default function Home() {
   // Chat state
   const [messages, setMessages] = useState<Message[]>([]);
   const [isInvoking, setIsInvoking] = useState(false);
+  const [streamingContent, setStreamingContent] = useState<Record<string, string>>({});
 
   // Event + status state
   const [events, setEvents] = useState<SessionEvent[]>([]);
@@ -86,6 +88,7 @@ export default function Home() {
       activeSession.id,
       (event) => {
         setEvents((prev) => [...prev, event]);
+        
         // Route error events to the error store
         if (event.type?.startsWith("error.") && event.payload) {
           addError({
@@ -96,6 +99,23 @@ export default function Home() {
             timestamp: event.timestamp,
             suggestion: event.payload.suggestion as string | undefined,
           });
+        }
+        
+        // Handle token events for streaming display
+        if (event.type === "token" && event.payload) {
+          const token = event.payload.token as string;
+          const timestamp = event.payload.timestamp as string;
+          if (token) {
+            setStreamingContent((prev) => ({
+              ...prev,
+              [timestamp || "default"]: (prev[timestamp || "default"] || "") + token,
+            }));
+          }
+        }
+        
+        // Handle approval events
+        if (event.type?.startsWith("approval.") && event.payload) {
+          // These are handled by the ApprovalBanner component
         }
       },
       () => setWsConnected(false),
@@ -233,6 +253,17 @@ export default function Home() {
     <div className="flex flex-col h-screen overflow-hidden">
       {/* Setup Banner */}
       <SetupBanner health={health} />
+
+      {/* Approval Banner */}
+      {activeSession && (
+        <ApprovalBanner
+          sessionId={activeSession.id}
+          onApprovalDecision={(approved) => {
+            // Refresh events after approval decision
+            setEvents([]);
+          }}
+        />
+      )}
 
       {/* Error Toast notifications */}
       <ErrorToast />

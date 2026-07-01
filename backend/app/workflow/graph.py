@@ -44,7 +44,10 @@ except ImportError:
     StateGraph = None  # type: ignore[assignment, misc]
 
 
-def build_forge_graph(deps: RuntimeDeps) -> Any:
+def build_forge_graph(
+    deps: RuntimeDeps,
+    enable_checkpointing: bool = True,
+) -> Any:
     """Build and compile the LangGraph workflow.
 
     Registers all 13 nodes, sets intake as the entry point,
@@ -52,6 +55,7 @@ def build_forge_graph(deps: RuntimeDeps) -> Any:
 
     Args:
         deps: The RuntimeDeps container with all runtime components.
+        enable_checkpointing: Whether to enable automatic checkpointing.
 
     Returns:
         A compiled LangGraph StateGraph (CompiledStateGraph) ready for
@@ -68,20 +72,41 @@ def build_forge_graph(deps: RuntimeDeps) -> Any:
 
     graph = StateGraph(ForgeState)
 
+    # Initialize checkpoint middleware if enabled
+    checkpoint_middleware = None
+    if enable_checkpointing:
+        try:
+            from app.workflow.checkpoint_middleware import create_checkpoint_middleware
+            # Use the recovery checkpoint store if available
+            if deps.recovery and hasattr(deps.recovery, '_checkpoint_store'):
+                checkpoint_middleware = create_checkpoint_middleware(deps.recovery._checkpoint_store)
+            else:
+                checkpoint_middleware = create_checkpoint_middleware(None)
+        except ImportError:
+            pass
+
+    # Helper to wrap nodes with checkpoint middleware
+    def add_node_with_checkpoint(name: str, node_fn: Any) -> None:
+        if checkpoint_middleware is not None:
+            wrapped = checkpoint_middleware.wrap_node(name, node_fn)
+            graph.add_node(name, wrapped)
+        else:
+            graph.add_node(name, node_fn)
+
     # Register all 13 nodes
-    graph.add_node("intake", make_intake_node(deps))
-    graph.add_node("classify", make_classify_node(deps))
-    graph.add_node("clarify", make_clarify_node(deps))
-    graph.add_node("architect", make_architect_node(deps))
-    graph.add_node("plan", make_plan_node(deps))
-    graph.add_node("execute", make_execute_node(deps))
-    graph.add_node("verify", make_verify_node(deps))
-    graph.add_node("policy", make_policy_node(deps))
-    graph.add_node("commit", make_commit_node(deps))
-    graph.add_node("doc_update", make_doc_update_node(deps))
-    graph.add_node("finalize", make_finalize_node(deps))
-    graph.add_node("status", make_status_node(deps))
-    graph.add_node("interrupt", make_interrupt_node(deps))
+    add_node_with_checkpoint("intake", make_intake_node(deps))
+    add_node_with_checkpoint("classify", make_classify_node(deps))
+    add_node_with_checkpoint("clarify", make_clarify_node(deps))
+    add_node_with_checkpoint("architect", make_architect_node(deps))
+    add_node_with_checkpoint("plan", make_plan_node(deps))
+    add_node_with_checkpoint("execute", make_execute_node(deps))
+    add_node_with_checkpoint("verify", make_verify_node(deps))
+    add_node_with_checkpoint("policy", make_policy_node(deps))
+    add_node_with_checkpoint("commit", make_commit_node(deps))
+    add_node_with_checkpoint("doc_update", make_doc_update_node(deps))
+    add_node_with_checkpoint("finalize", make_finalize_node(deps))
+    add_node_with_checkpoint("status", make_status_node(deps))
+    add_node_with_checkpoint("interrupt", make_interrupt_node(deps))
 
     # Set entry point
     graph.set_entry_point("intake")
