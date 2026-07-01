@@ -254,6 +254,7 @@ class VerificationPipeline:
             type=EventType.VERIFY_STAGE,
             session_id=self._session_id,
             source="verification_pipeline",
+            correlation_id=self._session_id,
             payload={
                 "task_id": self._task_id,
                 "stage_name": result.name,
@@ -280,6 +281,7 @@ class VerificationPipeline:
             type=EventType.VERIFY_PASSED,
             session_id=self._session_id,
             source="verification_pipeline",
+            correlation_id=self._session_id,
             payload={
                 "task_id": self._task_id,
             },

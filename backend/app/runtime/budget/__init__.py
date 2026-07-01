@@ -114,6 +114,7 @@ class SessionBudget:
                     type=EventType.BUDGET_EXCEEDED,
                     session_id=self._session_id,
                     source="session_budget",
+                    correlation_id=self._session_id,
                     payload={
                         "role": role,
                         "estimated_tokens": estimated_tokens,

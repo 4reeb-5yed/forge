@@ -309,6 +309,7 @@ class LearningRecorder:
             type=EventType.ERROR,
             session_id=session_id,
             source="learning_recorder",
+            correlation_id=session_id,
             payload={
                 "error": "outcome_recording_failure",
                 "task_id": task_id,

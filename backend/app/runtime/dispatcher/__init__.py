@@ -367,6 +367,7 @@ class TaskDispatcher:
             type=EventType.TASK_START,
             session_id=self._session_id,
             source="task_dispatcher",
+            correlation_id=self._session_id,
             payload={
                 "task_id": task.id,
                 "title": task.title,
@@ -384,6 +385,7 @@ class TaskDispatcher:
                 type=EventType.TASK_DONE,
                 session_id=self._session_id,
                 source="task_dispatcher",
+                correlation_id=self._session_id,
                 payload={
                     "task_id": task.id,
                     "title": task.title,
@@ -398,6 +400,7 @@ class TaskDispatcher:
                 type=EventType.TASK_FAIL,
                 session_id=self._session_id,
                 source="task_dispatcher",
+                correlation_id=self._session_id,
                 payload={
                     "task_id": task.id,
                     "title": task.title,

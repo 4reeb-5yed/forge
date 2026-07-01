@@ -824,6 +824,7 @@ class ModelRouter:
             type=EventType.MODEL_SELECTED,
             session_id=self._session_id,
             source="model_router",
+            correlation_id=self._session_id,
             payload={
                 "role": role.value,
                 "provider": entry.provider,
@@ -859,6 +860,7 @@ class ModelRouter:
             type=EventType.MODEL_FALLBACK,
             session_id=self._session_id,
             source="model_router",
+            correlation_id=self._session_id,
             payload={
                 "role": role.value,
                 "from_provider": from_provider,

@@ -359,6 +359,7 @@ class InterruptHandler:
             type=event_type,
             session_id=session_id,
             source="interrupt_handler",
+            correlation_id=session_id,
             payload=payload,
             correlation_id=session_id,
             event_id=str(uuid.uuid4()),

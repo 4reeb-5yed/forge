@@ -418,6 +418,7 @@ class CommitWorkflow:
             type=EventType.COMMIT_DONE,
             session_id=self._session_id,
             source="commit_workflow",
+            correlation_id=self._session_id,
             payload={
                 "task_id": task_id,
                 "commit_sha": commit_sha,
@@ -448,6 +449,7 @@ class CommitWorkflow:
             type=EventType.COMMIT_FAILED,
             session_id=self._session_id,
             source="commit_workflow",
+            correlation_id=self._session_id,
             payload={
                 "task_id": request.task_id,
                 "error": error_msg,
@@ -476,6 +478,7 @@ class CommitWorkflow:
             type=EventType.APPROVAL_REQUESTED,
             session_id=self._session_id,
             source="commit_workflow",
+            correlation_id=self._session_id,
             payload={
                 "task_id": request.task_id,
                 "action": "commit",
@@ -507,6 +510,7 @@ class CommitWorkflow:
             type=EventType.APPROVAL_REJECTED,
             session_id=self._session_id,
             source="commit_workflow",
+            correlation_id=self._session_id,
             payload={
                 "task_id": request.task_id,
                 "action": "commit",

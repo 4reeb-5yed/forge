@@ -413,6 +413,7 @@ class PolicyEngine:
             type=EventType.POLICY_DECISION,
             session_id=self._session_id,
             source="policy_engine",
+            correlation_id=self._session_id,
             payload=payload,
             correlation_id=self._session_id,
             event_id=str(uuid.uuid4()),
@@ -437,6 +438,7 @@ class PolicyEngine:
             type=EventType.TASK_FAIL,
             session_id=self._session_id,
             source="policy_engine",
+            correlation_id=self._session_id,
             payload={
                 "task_id": result.task_id,
                 "stage": result.stage,
