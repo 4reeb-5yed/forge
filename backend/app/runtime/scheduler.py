@@ -152,10 +152,11 @@ class SessionScheduler:
         # Emit event
         if self._event_emitter:
             from app.runtime.events.models import Event, EventType
-            event = Event(
+            event = Event.create(
+                source="scheduler",
                 type=EventType.SCHEDULER_SESSION_QUEUED,
                 session_id=session_id,
-                data={"priority": priority, "queue_size": self._queue.qsize()},
+                payload={"priority": priority, "queue_size": self._queue.qsize()},
             )
             await self._event_emitter(event)
 
@@ -176,10 +177,10 @@ class SessionScheduler:
             # Emit event
             if self._event_emitter:
                 from app.runtime.events.models import Event, EventType
-                event = Event(
-                    type=EventType.SCHEDULER_STARTED,
+                event = Event.create(
+                    source="scheduler",
                     session_id="system",
-                    data={"max_concurrent": self._max_concurrent},
+                    payload={"max_concurrent": self._max_concurrent},
                 )
                 await self._event_emitter(event)
 
@@ -208,10 +209,10 @@ class SessionScheduler:
             # Emit event
             if self._event_emitter:
                 from app.runtime.events.models import Event, EventType
-                event = Event(
-                    type=EventType.SCHEDULER_STOPPED,
+                event = Event.create(
+                    source="scheduler",
                     session_id="system",
-                    data={"cancelled_sessions": len(self._running)},
+                    payload={"cancelled_sessions": len(self._running)},
                 )
                 await self._event_emitter(event)
 
@@ -224,10 +225,10 @@ class SessionScheduler:
             # Emit event
             if self._event_emitter:
                 from app.runtime.events.models import Event, EventType
-                event = Event(
-                    type=EventType.SCHEDULER_PAUSED,
+                event = Event.create(
+                    source="scheduler",
                     session_id="system",
-                    data={"running_sessions": len(self._running)},
+                    payload={"running_sessions": len(self._running)},
                 )
                 await self._event_emitter(event)
 
@@ -240,10 +241,10 @@ class SessionScheduler:
             # Emit event
             if self._event_emitter:
                 from app.runtime.events.models import Event, EventType
-                event = Event(
-                    type=EventType.SCHEDULER_RESUMED,
+                event = Event.create(
+                    source="scheduler",
                     session_id="system",
-                    data={},
+                    payload={},
                 )
                 await self._event_emitter(event)
 
@@ -341,10 +342,10 @@ class SessionScheduler:
             # Emit session started event
             if self._event_emitter:
                 from app.runtime.events.models import Event, EventType
-                event = Event(
-                    type=EventType.SCHEDULER_SESSION_STARTED,
+                event = Event.create(
+                    source="scheduler",
                     session_id=session_id,
-                    data={"priority": queued.priority},
+                    payload={"priority": queued.priority},
                 )
                 await self._event_emitter(event)
                 start_event_emitted = True
@@ -358,10 +359,10 @@ class SessionScheduler:
             # Emit completion event
             if self._event_emitter:
                 from app.runtime.events.models import Event, EventType
-                event = Event(
-                    type=EventType.SCHEDULER_SESSION_COMPLETED,
+                event = Event.create(
+                    source="scheduler",
                     session_id=session_id,
-                    data={"result": str(result)[:100]},  # Truncate result
+                    payload={"result": str(result)[:100]},  # Truncate result
                 )
                 await self._event_emitter(event)
 
@@ -372,10 +373,10 @@ class SessionScheduler:
             # Emit cancelled event
             if self._event_emitter:
                 from app.runtime.events.models import Event, EventType
-                event = Event(
-                    type=EventType.SCHEDULER_SESSION_CANCELLED,
+                event = Event.create(
+                    source="scheduler",
                     session_id=session_id,
-                    data={},
+                    payload={},
                 )
                 await self._event_emitter(event)
 
@@ -386,10 +387,10 @@ class SessionScheduler:
             # Emit failed event
             if self._event_emitter:
                 from app.runtime.events.models import Event, EventType
-                event = Event(
-                    type=EventType.SCHEDULER_SESSION_FAILED,
+                event = Event.create(
+                    source="scheduler",
                     session_id=session_id,
-                    data={"error": str(e)[:200]},  # Truncate error
+                    payload={"error": str(e)[:200]},  # Truncate error
                 )
                 await self._event_emitter(event)
 
