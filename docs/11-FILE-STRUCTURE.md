@@ -28,15 +28,23 @@ forge/
 │   ├── app/
 │   │   ├── globals.css                            # Tailwind imports + custom styles
 │   │   ├── layout.tsx                             # Root layout (dark theme, Inter font)
-│   │   └── page.tsx                               # Main page (chat + sidebar + events)
+│   │   ├── page.tsx                               # Main page (chat + sidebar + events)
+│   │   └── setup/
+│   │       └── page.tsx                           # Setup Wizard (3-step configuration)
 │   ├── components/
 │   │   ├── ChatInput.tsx                          # Message input with send button
 │   │   ├── ChatMessage.tsx                        # Individual message rendering
+│   │   ├── ConnectionIndicator.tsx                # Health dot (green/yellow/red)
+│   │   ├── ErrorPanel.tsx                         # Slide-out error log with filtering
+│   │   ├── ErrorToast.tsx                         # Toast notifications (max 5, auto-dismiss)
 │   │   ├── EventLog.tsx                           # Real-time WebSocket event stream
 │   │   ├── SessionList.tsx                        # Sidebar session management
+│   │   ├── SetupBanner.tsx                        # Configuration reminder banner
 │   │   └── StatusBar.tsx                          # Runtime status + controls
 │   ├── lib/
-│   │   └── api.ts                                 # API client (REST + WebSocket)
+│   │   ├── api.ts                                 # API client (REST + WebSocket + Config)
+│   │   ├── error-store.ts                         # Error state management (200 entry cap)
+│   │   └── health.ts                              # Health polling hook (30s interval)
 │   ├── next.config.js                              # API rewrites to backend
 │   ├── package.json                               # Dependencies
 │   ├── postcss.config.mjs                         # PostCSS for Tailwind
@@ -72,7 +80,9 @@ forge/
 │   │   │
 │   │   ├── api/                                   # Layer 2: Application
 │   │   │   ├── __init__.py                        # FastAPI endpoints (REST + WS)
-│   │   │   └── auth.py                            # Bearer token authentication
+│   │   │   ├── auth.py                            # Bearer token authentication
+│   │   │   ├── config.py                          # Config REST API (GET/PUT /config, test, models)
+│   │   │   └── errors.py                          # ErrorEnvelope model + exception handlers
 │   │   │
 │   │   ├── adapters/                              # Layer 5: Adapters
 │   │   │   ├── __init__.py                        # Exports all adapters
@@ -145,6 +155,9 @@ forge/
 │   │   │   ├── classifier/                        # Intent Classifier
 │   │   │   │   ├── __init__.py                    # Rules-based classifier
 │   │   │   │   └── router.py                      # Intent → action routing
+│   │   │   │
+│   │   │   ├── config/                            # Configuration Service
+│   │   │   │   └── __init__.py                    # ConfigService (persistence, validation, hot-reload)
 │   │   │   │
 │   │   │   ├── clarification/                     # Clarification Engine
 │   │   │   │   └── __init__.py                    # SessionContext + questions
@@ -263,6 +276,7 @@ forge/
 │       ├── test_workspace.py                      # Workspace tests
 │       ├── test_workspace_properties.py           # Workspace property tests
 │       ├── test_dependency_wiring.py              # API↔RuntimeDeps wiring regression tests
+│       ├── test_config_service.py                 # ConfigService unit tests (37)
 │       ├── test_sandboxed_aider.py                # SandboxedAiderTool tests (44)
 │       └── test_scope_check.py                    # Scope check + workspace limit tests
 │
