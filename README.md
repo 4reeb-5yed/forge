@@ -229,7 +229,7 @@ pytest -k "properties"    # Property-based tests only
 - **Circuit breaker per AI provider** — dead providers ejected in milliseconds
 - **Secrets never persisted** — redacted at every serialization boundary
 - **Deterministic intent classification** — "stop" never depends on AI being reachable
-- **Workspace sandboxing** — each task runs in a Docker container with `--network none`, no host access, resource limits, and read-only rootfs. Only `OPENROUTER_API_KEY` reaches the sandbox.
+- **Workspace sandboxing** — each task runs in a Docker container with `--network none`, no host access, resource limits, and read-only rootfs. Only `OPENROUTER_API_KEY` and `HOME` reach the sandbox.
 - **Pre-commit scope check** — AI changes to CI pipelines, secrets, Docker configs, and env files are blocked before commit
 - **Diff audit trail** — every AI-generated change is captured as a git diff and recorded in the audit log
 

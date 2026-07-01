@@ -61,7 +61,7 @@ Every coding task runs in an ephemeral Docker container with maximum restriction
 
 ### Secret Isolation
 
-The sandbox receives **only** `OPENROUTER_API_KEY` (required for AI model calls). These secrets are **never** passed:
+The sandbox receives **only** `OPENROUTER_API_KEY` and `HOME` (required for AI model calls and Aider's cache directory). These secrets are **never** passed:
 
 - `GITHUB_TOKEN` — used exclusively by the `GitHubVCS` adapter on a separate code path
 - `DATABASE_URL` — used exclusively by the persistence layer
@@ -201,7 +201,7 @@ The audit section appears in the output as:
 |--------|------------------------|-------------------|
 | Host filesystem | Full access (same as backend process) | Only `/workspace` mount |
 | Network | Full access | `--network none` |
-| Credentials | All host env vars accessible | Only `OPENROUTER_API_KEY` |
+| Credentials | All host env vars accessible | Only `OPENROUTER_API_KEY` + `HOME` |
 | Resource limits | None (inherits process limits) | Memory, CPU, PID hard caps |
 | User privileges | Same as backend process | uid 1000, no capabilities |
 | Blast radius on compromise | Entire host | Single workspace directory |

@@ -203,13 +203,16 @@ forge/
 │   │   ├── config/                                # Config stubs
 │   │   │   └── __init__.py
 │   │   │
-│   │   └── boundaries.py                          # Alternate boundary checker
+│   │   ├── shared/                               # Shared types across layers
+│   │   │   └── __init__.py                       # Health, ToolResult, PermanentError
+│   │   │
+│   │   └── boundaries.py                          # Layer boundary enforcement
 │   │
 │   ├── docs/                                      # Legacy backend docs
 │   │   ├── ARCHITECTURE.md
 │   │   └── DEVELOPMENT.md
 │   │
-│   └── tests/                                     # 1,310+ tests
+│   └── tests/                                     # 1,343+ tests
 │       ├── __init__.py
 │       ├── test_adapters.py                       # Adapter unit tests (25)
 │       ├── test_api.py                            # API endpoint tests (34)
