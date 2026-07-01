@@ -49,6 +49,37 @@ async def _lifespan(app: FastAPI):
 
     await bootstrap(deps)
 
+    # ──────────────────────────────────────────────────────────────────
+    # Wire RuntimeDeps into the API layer's AppDependencies.
+    # This ensures all API endpoints use the same RuntimeInspector,
+    # SessionManager, InterruptHandler, and EventBus instances that the
+    # workflow layer uses — single shared set of runtime services.
+    # ──────────────────────────────────────────────────────────────────
+    from app.api import AppDependencies, SessionEventStore, set_deps as set_api_deps
+
+    event_store = getattr(app.state, "event_store", None) or SessionEventStore()
+
+    # Subscribe the event store to the event bus so WebSocket gets events
+    async def _forward_event(event):
+        await event_store.append(event.session_id, event)
+
+    deps.event_bus.subscribe("*", _forward_event, subscriber_id="api_event_store")
+
+    api_deps = AppDependencies(
+        session_manager=deps.session_manager,
+        inspector=deps.inspector,
+        interrupt_handler=deps.interrupt_handler,
+        event_store=event_store,
+    )
+    set_api_deps(api_deps)
+
+    logger.info(
+        "API layer wired to RuntimeDeps (inspector=%s, session_manager=%s, interrupt_handler=%s)",
+        type(deps.inspector).__name__,
+        type(deps.session_manager).__name__,
+        type(deps.interrupt_handler).__name__,
+    )
+
     # Build and store the compiled graph
     try:
         from app.workflow.graph import build_forge_graph
@@ -95,13 +126,24 @@ def create_app() -> FastAPI:
     #   GET /sessions/{id}/status|explain,
     #   GET /capabilities,
     #   WS /sessions/{id}/events
+    #
+    # DEPENDENCY WIRING: The API layer's `get_deps()` function is wired
+    # to return an AppDependencies backed by the RuntimeDeps assembled
+    # during the lifespan (bootstrap). This is done via a startup event
+    # that calls set_deps() after the lifespan initializes RuntimeDeps.
     # ──────────────────────────────────────────────────────────────────
-    from app.api import create_app as create_api_app
+    from app.api import create_app as create_api_app, AppDependencies, set_deps, SessionEventStore
+
+    # Create the event store (shared between API and event bus)
+    event_store = SessionEventStore()
 
     api_app = create_api_app()
     # Include all routes from the API app into this app
     for route in api_app.routes:
         app.routes.append(route)
+
+    # Store the event store so the lifespan can wire it
+    app.state.event_store = event_store
 
     @app.post("/workflow/invoke", response_model=InvokeResponse)
     async def invoke_workflow(request: InvokeRequest) -> InvokeResponse:
