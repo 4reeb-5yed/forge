@@ -26,10 +26,15 @@
 | PostgreSQL schema + stores + migrations | ✅ Ready to use |
 | Docker Compose deployment | ✅ Working |
 | Next.js frontend with real-time events | ✅ Working |
-| 1,280+ tests (unit + property-based) | ✅ All passing |
+| 1,330+ tests (unit + property-based + integration) | ✅ All passing |
 | API authentication (Bearer token) | ✅ Working |
 | WebSocket event streaming | ✅ Working |
 | Boundary enforcement (architectural drift prevention) | ✅ Working |
+| **Auth middleware applied to all endpoints** | ✅ Working |
+| **Dependency wiring: API ↔ Workflow share single RuntimeDeps** | ✅ Working |
+| **Config directory with adapter discovery** | ✅ Working |
+| **Coding tool stored in RuntimeDeps and accessible to nodes** | ✅ Working |
+| **Registry checker properly validates provider availability** | ✅ Working |
 
 ## Known Limitations
 

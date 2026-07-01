@@ -111,6 +111,7 @@ curl http://localhost:8000/health
 | `FORGE_LOG_LEVEL` | No | `INFO` | Logging level |
 | `FORGE_CONFIG_DIR` | No | `./config` | Path to YAML config directory |
 | `FORGE_USE_SANDBOX` | No | `auto` | Sandbox mode: `auto`, `always`, or `never` |
+| `NEXT_PUBLIC_WS_URL` | No | `ws://localhost:8000` | WebSocket URL for frontend event stream |
 | `SESSION_MAX_TOKENS` | No | `1000000` | Max tokens per session budget |
 | `HEALTH_MONITOR_INTERVAL_S` | No | `30` | Health check interval in seconds |
 

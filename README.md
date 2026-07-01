@@ -70,7 +70,7 @@ python -m venv .venv && source .venv/bin/activate  # or .venv\Scripts\activate o
 pip install -e ".[dev]"
 cp .env.example .env  # Edit with your keys
 
-# Run tests (1,280+ tests, ~5 minutes)
+# Run tests (1,330+ tests)
 pytest
 
 # Start the server
@@ -91,8 +91,11 @@ npm run dev
 ```bash
 curl -X POST http://localhost:8000/workflow/invoke \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $FORGE_API_TOKEN" \
   -d '{"message": "Add user authentication with JWT", "session_id": "demo-1"}'
 ```
+
+> All endpoints require `Authorization: Bearer <token>`. Set `FORGE_AUTH_DISABLED=true` in `.env` to skip auth during development.
 
 ## Architecture
 
@@ -185,6 +188,7 @@ Auth: `Authorization: Bearer <FORGE_API_TOKEN>` on all endpoints.
 
 | File | Purpose |
 |------|---------|
+| `config/adapters.yaml` | Adapter discovery (OpenRouter, GitHub, Aider) |
 | `config/models.yaml` | AI provider fallback chains per role |
 | `config/policies.yaml` | Retry budget + escalation rules |
 | `config/rate_limits.yaml` | Per-session token/cost limits |
@@ -199,14 +203,16 @@ Auth: `Authorization: Bearer <FORGE_API_TOKEN>` on all endpoints.
 | `GITHUB_TOKEN` | Yes | GitHub personal access token |
 | `DATABASE_URL` | For Docker | PostgreSQL connection string |
 | `FORGE_API_TOKEN` | Yes | Bearer token for API auth |
+| `FORGE_AUTH_DISABLED` | No | Set `true` to disable auth (development only) |
 | `AIDER_MODEL` | No | Model for Aider (default: claude-sonnet-4-20250514) |
 | `FORGE_USE_SANDBOX` | No | Sandbox mode: `auto` (default), `always`, `never` |
+| `NEXT_PUBLIC_WS_URL` | No | WebSocket backend URL for frontend (default: `ws://localhost:8000`) |
 
 ## Testing
 
 ```bash
 cd backend
-pytest                    # Full suite (1,280+ tests)
+pytest                    # Full suite (1,330+ tests)
 pytest -x                 # Stop on first failure
 pytest tests/test_api.py  # Specific module
 pytest -k "properties"    # Property-based tests only
