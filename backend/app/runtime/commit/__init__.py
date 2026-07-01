@@ -473,7 +473,7 @@ class CommitWorkflow:
             return
 
         event = Event.create(
-            type=EventType.APPROVAL_PENDING,
+            type=EventType.APPROVAL_REQUESTED,
             session_id=self._session_id,
             source="commit_workflow",
             payload={
