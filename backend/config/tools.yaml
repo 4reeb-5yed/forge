@@ -13,8 +13,12 @@ tools:
     env:
       AIDER_MODEL: "${AIDER_MODEL}"
 
-  # OpenHands stub - deferred to post-MVP (see design doc I.3)
+  # OpenHands is implemented in app/adapters/openhands.py and used automatically
+  # when OPENHANDS_API_KEY is set — see bootstrap.py _create_coding_tool() (highest
+  # priority coding tool, checked before Sandboxed Aider and direct Aider).
+  # This tools.yaml entry is currently unused since probe-based discovery
+  # (run_discovery) is skipped at boot by bootstrap.py.
   openhands:
-    enabled: false
+    enabled: true
     command: "openhands"
     timeout_s: 600

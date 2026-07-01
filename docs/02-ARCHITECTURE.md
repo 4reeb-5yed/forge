@@ -1,14 +1,16 @@
 # Architecture
 
-## 6-Layer Design
+## Layers
 
-Forge uses a strict 6-layer architecture. Each layer communicates only with its adjacent layer through defined interfaces.
+Forge's code is organized into 6 conceptual layers, but only 5 of them have an *enforced* boundary today: Presentation, Application, Runtime, Adapter, and Infrastructure. Each enforced layer is intended to communicate only with its adjacent layer through defined interfaces.
+
+The **Workflow** layer (`app/workflow/`, LangGraph orchestration) is not enforced. Neither of the two boundary-checker implementations in the codebase (see below) includes an `app.workflow` module-prefix mapping, so imports into and out of `app.workflow` are never classified or checked. In practice this means workflow nodes are expected — by convention only — to stay thin wrappers that delegate to Runtime, but nothing in the boundary checkers actually prevents `app.workflow` from importing an Adapter or Infrastructure module directly.
 
 ```mermaid
 graph TB
     L1[Layer 1: Frontend<br/>Next.js + Tailwind]
     L2[Layer 2: Application<br/>FastAPI REST + WebSocket]
-    L3[Layer 3: Workflow<br/>LangGraph State Machine]
+    L3[Layer 3: Workflow<br/>LangGraph State Machine<br/><i>boundary not enforced</i>]
     L4[Layer 4: Runtime<br/>27 asyncio modules]
     L5[Layer 5: Adapter<br/>OpenRouter, GitHub, Aider]
     L6[Layer 6: Infrastructure<br/>PostgreSQL, Docker, GitHub API]
@@ -49,8 +51,10 @@ graph TB
 | **Location** | `backend/app/workflow/` |
 | **Technology** | LangGraph StateGraph |
 | **Responsibility** | Orchestrate the build lifecycle as a state machine |
-| **Boundary rule** | Nodes are thin wrappers that delegate to runtime components |
+| **Boundary rule** | Nodes are *intended* to be thin wrappers that delegate to runtime components — but see note below |
 | **Communicates with** | Runtime layer (all 27 modules via RuntimeDeps) |
+
+> **Not architecturally enforced.** `app.workflow` has no module-prefix entry in either boundary checker (`app/boundaries.py`'s `LAYER_PREFIXES` or `app/runtime/boundaries/__init__.py`'s `LAYER_MODULES`), so it is never classified into a layer and its imports are never checked. The "thin wrapper" rule above is a convention, not something the test suite currently verifies.
 
 ### Layer 4: Runtime
 
@@ -109,7 +113,19 @@ Both Adapters and Runtime import from this module. This avoids circular dependen
 
 **Design note:** `app/runtime/types.py` re-exports shared types for backward compatibility, but the canonical source is `app/shared/`.
 
-The boundary checker (`app/boundaries.py`) enforces these rules at test time:
+### Two Boundary Checkers (Redundant and Inconsistent)
+
+There are currently **two independent boundary-checker implementations** in the codebase, and they do not agree on the layer model:
+
+| | `app/boundaries.py` | `app/runtime/boundaries/__init__.py` |
+|--|--|--|
+| **`Layer` type** | `str, Enum` | `IntEnum` |
+| **Layers modeled** | `PRESENTATION`, `APPLICATION`, `RUNTIME`, `ADAPTER`, `SHARED` | `PRESENTATION`, `APPLICATION`, `RUNTIME`, `ADAPTER`, `INFRASTRUCTURE` |
+| **6th layer ("Workflow")** | Not modeled | Not modeled |
+| **"Below" adapters** | A `SHARED` layer (`app/shared/`) that both Runtime and Adapter may import from | An `INFRASTRUCTURE` layer (`app/db`, `app/config`) that only Adapter may import from |
+| **Entry point** | `check_all_boundaries(app_root)` | `check_boundaries(root_path)` / `enforce_boundaries(root_path)` |
+
+Both implementations enforce a **5-layer** model (not 6) — neither has a concept of a separate "Workflow" layer, and neither maps `app.workflow` to anything. They diverge on what sits below Adapter: one checker treats `app/shared/` as a peer layer importable by both Runtime and Adapter, while the other treats `app/db`/`app/config` as an `INFRASTRUCTURE` layer importable only by Adapter. Because the two checkers use different module-prefix tables, a module path classified as one layer by one checker may be unclassified (and therefore unchecked) by the other. Which checker actually runs in CI/tests should be treated as the source of truth for enforced behavior; until they are consolidated into one implementation, treat this section as documenting intent that is only partially and inconsistently enforced.
 
 ```python
 from app.boundaries import check_all_boundaries
@@ -138,7 +154,7 @@ Every event in the system follows this schema:
 ```python
 @dataclass
 class Event:
-    schema_version: str       # "1.0"
+    schema_version: int       # 1 (default), for forward compatibility
     seq: int                  # Monotonically increasing per session
     session_id: str           # Which session produced this event
     type: EventType           # Typed enum (TASK_START, FORGE_READY, etc.)
@@ -150,13 +166,34 @@ class Event:
     correlation_id: str       # Trace across related events
 ```
 
+### EventBus API
+
+`EventBus` (`app/runtime/events/bus.py`) exposes:
+
+| Method | Purpose |
+|--------|---------|
+| `publish(event)` | Assigns the next monotonic `seq` for the event's session (if not already set), enforces idempotency on `(session_id, seq)`, stores the event, and delivers it to matching subscribers |
+| `subscribe(pattern, handler, subscriber_id)` | Registers a handler under a glob pattern matched against `EventType` values (e.g. `"capability.*"`, `"*.done"`); each subscriber gets its own bounded queue |
+| `unsubscribe(subscriber_id)` | Removes a subscriber |
+| `replay(correlation_id, since_seq=0)` | Returns stored events for a session with `seq` strictly greater than `since_seq`, ordered by `seq` — this is what backs crash recovery and late-joining subscribers |
+| `get_seq(session_id)` | Returns the current highest assigned `seq` for a session |
+| `clear_session(session_id)` | Drops all stored events, seq counters, and idempotency keys for a session |
+| `get_subscriber_queue(subscriber_id)` | Returns a subscriber's `BackpressureQueue`, for inspecting queue depth or spillover |
+
+**Delivery semantics:**
+
+- **At-least-once with retry** — each subscriber delivery is retried up to 5 attempts; a permanently failing subscriber is logged and dropped for that event rather than blocking the bus
+- **Idempotency** — the bus tracks `(session_id, seq)` pairs it has already published, so re-publishing an event that already carries a seq is a no-op
+- **Per-session ordering** — a per-session `asyncio.Lock` serializes seq assignment, guaranteeing events are ordered by `seq` within a session
+- **Backpressure** — each subscriber has a bounded queue (default depth 1000). Coalescible `token` events are dropped oldest-first when the queue is full; lifecycle events (`*.start`, `*.done`, `*.fail`, `question`, `error`, etc.) are never dropped — the producer instead blocks for up to a configurable timeout (default 5s) and, on timeout, the event is spilled to durable storage instead of lost
+
 ### Why the Event Bus Matters
 
 1. **Audit trail** is a projection of events — never constructed from state
 2. **WebSocket streaming** to the frontend is just another subscriber
 3. **Learning engine** records outcomes by observing events, not by coupling to execution
 4. **Inspector** queries the audit trail (never the components directly)
-5. **Crash recovery** replays from the last checkpointed event sequence
+5. **Crash recovery** replays from the last checkpointed event sequence via `replay()`
 
 ## Component Dependency Graph
 

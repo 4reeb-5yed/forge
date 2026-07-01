@@ -128,9 +128,9 @@ docker-compose.yml    — Infrastructure definition
 .kiro/                — Kiro spec files
 ```
 
-### Suspicious Patterns (Also Blocked)
+### Suspicious Patterns (Blocked Unconditionally)
 
-Files matching these patterns are blocked:
+Files matching these patterns are blocked exactly the same way as `BLOCKED_PATHS` — `check_diff_scope()` appends any match to the same `blocked` list and returns `passed=False` unconditionally. There is no separate "flagged but allowed" tier; a suspicious-pattern match is treated identically to an always-blocked path.
 
 ```
 *.pem, *.key, *.cert  — Cryptographic materials
@@ -150,6 +150,10 @@ When `allowed_paths` is specified (per-task scope), changes outside those paths 
    - Which paths were out of scope
    - The reason string
 3. The workflow can retry or escalate via the policy engine
+
+### Fail-Open on Error (Exception to Fail-Closed Design)
+
+Unlike sandbox selection (which fails loudly/closed — see Sandbox Selection above), `check_diff_scope()` fails **open**: if `git` is not available (`FileNotFoundError`) or any other exception occurs while computing the diff, the function returns `ScopeCheckResult(passed=True, ...)` and the commit is allowed to proceed. This means a broken or missing `git` binary, or any unexpected error in the diff/ls-files subprocess calls, silently bypasses the scope check rather than blocking the commit. Operators should ensure `git` is reliably available in the environment running the commit node, since a scope-check failure here does not stop execution the way a missing Docker CLI does in `always` sandbox mode.
 
 ## Layer 3: Workspace Limits
 

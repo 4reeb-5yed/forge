@@ -59,7 +59,7 @@ The project is **feature-complete for the core runtime**:
 |------|--------|
 | Runtime core (27 modules) | ✅ Complete |
 | LangGraph workflow (13 nodes) | ✅ Wired and functional |
-| Adapters (OpenRouter, GitHub, Aider) | ✅ Implemented |
+| Adapters (OpenRouter, GitHub, Aider, Sandboxed Aider, OpenHands) | ✅ Implemented |
 | PostgreSQL persistence (4 tables) | ✅ Schema + stores ready |
 | Docker deployment | ✅ Compose with health checks |
 | Frontend (Next.js) | ✅ Responsive, real-time events |
@@ -85,7 +85,7 @@ The project is **feature-complete for the core runtime**:
 |---------|-------------|
 | AI completions (clarify, architect, plan) | `OPENROUTER_API_KEY` |
 | Repository clone/commit/push | `GITHUB_TOKEN` |
-| Coding tool execution | `AIDER_MODEL` + Aider installed |
+| Coding tool execution | One of three, checked in priority order by `_create_coding_tool()`: (1) `OPENHANDS_API_KEY` set → OpenHands Cloud; (2) Docker available → `SandboxedAiderTool` (no extra key needed); (3) fallback → direct `AiderTool` requiring `AIDER_MODEL` + Aider installed (unsandboxed, logs a security warning) |
 | Database persistence | `DATABASE_URL` (PostgreSQL) |
 
 Without keys, the system starts in **DEGRADED** mode — it reports what's missing and refuses builds, but all runtime logic remains exercisable.

@@ -19,16 +19,25 @@ frontend/
 ├── app/
 │   ├── globals.css          # Tailwind directives + custom styles
 │   ├── layout.tsx           # Root layout (html, body, fonts)
-│   └── page.tsx             # Main page (chat + sidebar + events)
+│   ├── page.tsx             # Main page (chat + sidebar + events)
+│   └── setup/
+│       └── page.tsx         # 3-step Setup Wizard (API keys, model, sandbox mode)
 ├── components/
 │   ├── ChatInput.tsx        # Message input with send button
 │   ├── ChatMessage.tsx      # Individual message rendering
+│   ├── ConnectionIndicator.tsx  # Health/connection status dot (healthy/degraded/unhealthy)
+│   ├── ErrorPanel.tsx       # Slide-in panel listing all captured errors, filterable by category
+│   ├── ErrorToast.tsx       # Auto-dismissing toast notifications for recoverable errors
 │   ├── EventLog.tsx         # Real-time event stream panel
 │   ├── SessionList.tsx      # Sidebar with session management
+│   ├── SetupBanner.tsx      # Banner linking to /setup when health.configured is false
 │   └── StatusBar.tsx        # Runtime status + control buttons
 ├── lib/
-│   └── api.ts              # API client (REST + WebSocket)
+│   ├── api.ts               # API client (REST + WebSocket)
+│   ├── error-store.ts       # Client-side error store (up to 200 entries, listener-based)
+│   └── health.ts            # useHealthPolling hook — polls /health, tracks connection state
 ├── next.config.js          # Next.js configuration (API rewrites)
+├── postcss.config.mjs      # PostCSS configuration (Tailwind plugin)
 ├── tailwind.config.ts      # Tailwind theme (forge-* colors)
 ├── tsconfig.json           # TypeScript configuration
 └── package.json
@@ -97,6 +106,32 @@ Real-time scrolling log of `SessionEvent` objects received via WebSocket. Shows 
 
 Displays runtime status (current node, active task, budget) and control buttons (Interrupt, Resume, Stop).
 
+### `ConnectionIndicator.tsx`
+
+Small status dot + label reflecting backend connectivity. Derives a `healthy` / `degraded` / `unhealthy` state from the polled `HealthResponse` and the WebSocket connection flag — shows "Disconnected" if not connected or no health data is available yet.
+
+### `ErrorPanel.tsx`
+
+Slide-in side panel (backdrop + right-anchored drawer) listing all errors captured in the error store, with a category filter (`all`, `configuration`, `runtime`, `workflow`, `connection`). Each entry shows the error code, category, timestamp, message, and an optional suggestion.
+
+### `ErrorToast.tsx`
+
+Renders auto-dismissing toast notifications (top-right, max 5 visible, 8s auto-dismiss, paused on hover) for new errors that are marked `recoverable` in the error store. Shows an overflow count when more than 5 errors have queued.
+
+### `SetupBanner.tsx`
+
+Yellow banner rendered when the polled health response is missing, `configured` is `false`, or `status` is not `healthy`. Lists any unhealthy/degraded component names and links to `/setup` via a "Go to Setup" button.
+
+### `app/setup/page.tsx` — Setup Wizard
+
+A 3-step client-side wizard for first-run configuration:
+
+1. **API Keys** — OpenRouter key (required) and GitHub token (optional), each with a "Test" button that calls `testConfigKey()` and shows latency/success or an error.
+2. **Model Selection** — Loads available models via `getConfigModels()` and lets the user pick one from a dropdown.
+3. **Sandbox Mode** — Choose `always` / `auto` / `never`, with a live Docker availability check (via `getHealth()` → `components.docker.status`) shown as a status dot.
+
+On load, it pre-populates fields from `getConfig()` if a config already exists. Saving calls `updateConfig()` with the collected keys, model, and sandbox mode, then redirects to `/`.
+
 ## API Client
 
 **File:** `frontend/lib/api.ts`
@@ -123,7 +158,26 @@ getExplanation(id: string): Promise<DecisionExplanation>
 interruptSession(id: string): Promise<{status: string}>
 resumeSession(id: string): Promise<{status: string}>
 stopSession(id: string): Promise<{status: string}>
+
+// Config & Health (powers the Setup Wizard)
+getConfig(): Promise<ConfigResponse>
+updateConfig(payload: Partial<ConfigResponse>): Promise<ConfigResponse>
+testConfigKey(component: string, key?: string): Promise<KeyTestResult>
+getConfigHealth(): Promise<Record<string, ComponentHealth>>
+getConfigModels(): Promise<{models: Array<{id: string; name: string}>}>
+getHealth(): Promise<HealthResponse>
 ```
+
+### Config & Health API
+
+These endpoints back the Setup Wizard (`app/setup/page.tsx`) and the connection/health UI (`ConnectionIndicator`, `SetupBanner`, `useHealthPolling`):
+
+- **`getConfig()`** — `GET /api/config`. Returns the current runtime config (`configured`, `openrouter_api_key`, `github_token`, `selected_model`, `sandbox_mode`), used to pre-populate the wizard on load.
+- **`updateConfig(payload)`** — `PUT /api/config`. Persists a partial config update (e.g. API keys, selected model, sandbox mode) to the backend via `ConfigService`.
+- **`testConfigKey(component, key)`** — `POST /api/config/test`. Tests a single credential (`"openrouter"` or `"github"`) without saving it, returning `{success, latency_ms, error?}`.
+- **`getConfigHealth()`** — `GET /api/config/health`. Returns per-component health (`Record<string, ComponentHealth>`) for configuration-dependent components.
+- **`getConfigModels()`** — `GET /api/config/models`. Returns the list of models available for selection in step 2 of the wizard.
+- **`getHealth()`** — `GET /api/health` (no auth required). Returns overall `{status, configured, components}`, used both by the Setup Wizard's Docker check and by `useHealthPolling()` for the top-level connection indicator/banner.
 
 ### WebSocket Connection
 
