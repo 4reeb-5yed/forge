@@ -15,7 +15,7 @@ from app.shared import Health, ToolResult
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = 300  # 5 minutes
-DEFAULT_MODEL = "claude-sonnet-4-20250514"
+DEFAULT_MODEL = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
 
 
 class AiderTool:

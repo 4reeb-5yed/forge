@@ -322,14 +322,12 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
 
 
 def _create_coding_tool():
-    """Create the appropriate coding tool based on Docker availability.
+    """Create the appropriate coding tool.
 
-    Prefers SandboxedAiderTool (Docker container per task) when Docker
-    is available. Falls back to direct AiderTool if Docker is not found.
-
-    IMPORTANT: In 'auto' mode, falling back to unsandboxed execution logs
-    a WARNING (not info) so operators notice the security gap. In 'always'
-    mode, missing Docker is a hard failure that prevents startup.
+    Priority:
+    1. OpenHands Cloud (if OPENHANDS_API_KEY is set) — uses its own free model
+    2. SandboxedAiderTool (if Docker available)
+    3. Direct AiderTool (fallback, unsandboxed)
 
     Security: only OPENROUTER_API_KEY is passed to the sandbox.
     GITHUB_TOKEN and other secrets are never exposed to the coding tool.
@@ -337,6 +335,14 @@ def _create_coding_tool():
     import os
     import shutil
 
+    # Priority 1: OpenHands Cloud
+    openhands_key = os.environ.get("OPENHANDS_API_KEY", "")
+    if openhands_key:
+        from app.adapters.openhands import OpenHandsTool
+        logger.info("Coding tool: OpenHandsTool (OpenHands Cloud API)")
+        return OpenHandsTool(api_key=openhands_key)
+
+    # Priority 2/3: Aider (sandboxed or direct)
     use_sandbox = os.environ.get("FORGE_USE_SANDBOX", "auto")
 
     if use_sandbox == "never":

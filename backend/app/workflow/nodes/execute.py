@@ -117,10 +117,26 @@ def make_execute_node(deps: RuntimeDeps) -> NodeFn:
         tool_success = False
         if deps.coding_tool is not None:
             try:
-                result = await deps.coding_tool.execute(
-                    task_description=task_description,
-                    workspace_path=workspace_path,
-                )
+                # Pass repo_url for tools that work directly on GitHub (like OpenHands)
+                if hasattr(deps.coding_tool, 'execute'):
+                    import inspect
+                    sig = inspect.signature(deps.coding_tool.execute)
+                    if 'repo_url' in sig.parameters:
+                        result = await deps.coding_tool.execute(
+                            task_description=task_description,
+                            workspace_path=workspace_path,
+                            repo_url=repo_url,
+                        )
+                    else:
+                        result = await deps.coding_tool.execute(
+                            task_description=task_description,
+                            workspace_path=workspace_path,
+                        )
+                else:
+                    result = await deps.coding_tool.execute(
+                        task_description=task_description,
+                        workspace_path=workspace_path,
+                    )
                 tool_success = result.success
                 if not result.success:
                     logger.warning("Coding tool failed: %s", result.error)
