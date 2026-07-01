@@ -288,7 +288,7 @@ class NewServiceProtocol(Protocol):
 Create `backend/app/adapters/new_service.py`:
 
 ```python
-from app.shared import Health
+from app.shared import Health  # Canonical source for shared types
 
 class NewServiceAdapter:
     name = "new_service"
@@ -318,7 +318,7 @@ The HealthMonitor will periodically call `health_check()` to maintain registry a
 ### Rules for Adapters
 
 1. **No business logic** — An adapter translates one call to one infrastructure call
-2. **No back-imports** — Import shared types from `app.shared` (Health, ToolResult, PermanentError). Never import from `app.runtime` directly
+2. **No back-imports** — Import shared types from `app.shared` (Health, ToolResult, PermanentError). These are the canonical sources. Never import from `app.runtime` directly.
 3. **Error classification** — Distinguish permanent errors (auth) from transient (rate limit, timeout)
 4. **Secret safety** — Never log tokens, sanitize error messages
 5. **Health check** — Every adapter must implement `health_check() -> Health`

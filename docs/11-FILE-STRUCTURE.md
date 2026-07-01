@@ -203,8 +203,8 @@ forge/
 │   │   ├── config/                                # Config stubs
 │   │   │   └── __init__.py
 │   │   │
-│   │   ├── shared/                               # Shared types across layers
-│   │   │   └── __init__.py                       # Health, ToolResult, PermanentError
+│   │   ├── shared/                               # Canonical source for shared types
+│   │   │   └── __init__.py                       # Health, ToolResult, PermanentError (single source of truth)
 │   │   │
 │   │   └── boundaries.py                          # Layer boundary enforcement
 │   │
@@ -290,7 +290,7 @@ forge/
 | `backend/app/api/` | 2 | REST endpoints + auth |
 | `backend/app/adapters/` | 5 | OpenRouter, GitHub, Aider, Sandboxed Aider |
 | `backend/app/workflow/` | 7 + 13 nodes = 20 | State machine + node functions |
-| `backend/app/runtime/` | 31 | Core business logic (27 modules + shared) |
+| `backend/app/runtime/` | 27 | Core business logic (27 modules) |
 | `backend/app/db/` | 6 | PostgreSQL stores |
 | `backend/alembic/` | 4 | Database migrations |
 | `backend/config/` | 6 | YAML configuration |

@@ -568,16 +568,16 @@ def enforce_boundaries() -> None  # Raises BoundaryCheckError on violation
 
 ---
 
-## Shared
+## Shared (`app/shared/`)
 
-### `models.py` — Core Domain Models
+The `app/shared/` module is the canonical source for types shared across layers:
 
-Defines all fundamental types: `ForgeState`, `Task`, `Capability`, `Role`, `CapabilityEntry`, `SessionContext`, `DigitalTwin`, `DocumentationState`, `FileEntry`.
+### `__init__.py` — Shared Types
 
-### `protocols.py` — Protocol Interfaces
+| Type | Description |
+|------|-------------|
+| `Health` / `HealthStatus` | Health check result type used by all adapters |
+| `ToolResult` | Result of coding tool execution |
+| `PermanentError` | Non-retryable error for auth failures |
 
-All adapter protocols that runtime modules depend on (AIProvider, VCSConnector, CodingTool, etc.).
-
-### `types.py` — Shared Types
-
-Common types like `Health`, `ToolResult` used across modules.
+**Note:** `app/runtime/types.py` re-exports these types for backward compatibility.

@@ -91,15 +91,23 @@ graph TB
 ❌ Runtime cannot import from API (no transport awareness)
 ```
 
-### Shared Layer Exception
+### Shared Layer (`app/shared/`)
 
-The `app/shared/` module contains types shared across layers (Health, ToolResult, PermanentError). Both Adapters and Runtime can import from Shared. This avoids circular dependencies while maintaining clean boundaries.
+The `app/shared/` module is the **canonical source** for core types shared across layers:
+- `Health` / `HealthStatus` — Health check result type
+- `ToolResult` — Coding tool execution result
+- `PermanentError` — Non-retryable provider errors
+
+Both Adapters and Runtime import from this module. This avoids circular dependencies while maintaining clean boundaries.
 
 ```
-✅ Adapter can import from Shared (for Health, ToolResult types)
-✅ Runtime can import from Shared (for shared types)
+✅ Adapter can import from Shared (Health, ToolResult)
+✅ Runtime can import from Shared (Health, ToolResult)
+✅ Runtime types in app/runtime/types.py re-export from Shared for backward compatibility
 ❌ Shared cannot import from Adapter or Runtime (no back-imports)
 ```
+
+**Design note:** `app/runtime/types.py` re-exports shared types for backward compatibility, but the canonical source is `app/shared/`.
 
 The boundary checker (`app/boundaries.py`) enforces these rules at test time:
 

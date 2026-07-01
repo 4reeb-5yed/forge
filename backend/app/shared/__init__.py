@@ -79,3 +79,12 @@ class PermanentError(Exception):
         self.provider = provider
         self.error_type = error_type
         super().__init__(message)
+
+
+# Re-export for convenience - types defined in this module
+__all__ = [
+    "Health",
+    "HealthStatus",
+    "ToolResult",
+    "PermanentError",
+]
