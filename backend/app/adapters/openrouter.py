@@ -96,6 +96,7 @@ class OpenRouterProvider:
             self._classify_error(response)
 
         data = response.json()
+        logger.info("OpenRouter response keys: %s, status=%d", list(data.keys()), response.status_code)
         
         # OpenRouter sometimes returns 200 with an error body
         if "error" in data:
