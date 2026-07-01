@@ -65,6 +65,24 @@ async def bootstrap(deps: RuntimeDeps) -> None:
     except Exception as exc:
         logger.warning("Health monitor failed to start: %s", exc)
 
+    # Step 4.5: Register OpenRouter as a capability (if API key present)
+    # This makes _check_provider("openrouter") return True for the model router
+    import os
+    if os.environ.get("OPENROUTER_API_KEY"):
+        from app.runtime.models import Capability, CapabilityEntry, CapabilityKind, Role
+        try:
+            openrouter_entry = CapabilityEntry(
+                name=Capability.AI_CODER,
+                kind=CapabilityKind.AI_PROVIDER,
+                healthy=True,
+                roles=[Role.CODER, Role.ARCHITECT, Role.PLANNER, Role.CLARIFICATION, Role.REVIEWER, Role.DOC_WRITER],
+                provider_name="openrouter",
+            )
+            await deps.registry.register(openrouter_entry)
+            logger.info("Registered OpenRouter as AI provider (all roles)")
+        except Exception as exc:
+            logger.warning("Failed to register OpenRouter capability: %s", exc)
+
     # Step 5: Evaluate operational mode (also emits forge.ready per requirement 13.7)
     mode_result = await deps.mode_evaluator.evaluate_and_emit()
     logger.info("Operational mode: %s", mode_result.mode.value)
@@ -90,6 +108,7 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
     Returns:
         A fully wired RuntimeDeps instance.
     """
+    import os
     from app.runtime.audit import AuditTrail
     from app.runtime.events.bus import EventBus
     from app.runtime.health import HealthMonitor, HealthMonitorConfig
@@ -100,10 +119,11 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
     from app.runtime.policies import PolicyConfig, PolicyEngine
     from app.runtime.recovery import CrashRecovery
     from app.runtime.registry import CapabilityRegistry
-    from app.runtime.router import ModelRouter, RoleChainConfig
+    from app.runtime.router import ModelRouter, RoleChainConfig, ChainEntry
     from app.runtime.secrets import SecretHolder
     from app.runtime.session import SessionManager
     from app.runtime.workspace import WorkspaceManager
+    from app.runtime.models import Role, Capability, CapabilityEntry, CapabilityKind
 
     # Core infrastructure
     event_bus = EventBus()
@@ -144,7 +164,30 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
     # Subscribe audit trail to all events
     event_bus.subscribe("*", audit_trail.handle_event, subscriber_id="audit_trail")
 
-    # AI routing — uses empty chain config (no providers configured yet)
+    # ─── AI Routing: Wire OpenRouter as real call adapter ─────────────
+    # If OPENROUTER_API_KEY is set, use the real adapter. Otherwise no-op.
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+    if openrouter_key:
+        from app.adapters.openrouter import OpenRouterProvider
+        openrouter = OpenRouterProvider(api_key=openrouter_key)
+        call_adapter = openrouter.as_call_adapter()
+        logger.info("AI call adapter: OpenRouterProvider (real AI calls enabled)")
+    else:
+        call_adapter = _noop_call_adapter
+        logger.warning("No OPENROUTER_API_KEY — using no-op call adapter (AI calls disabled)")
+
+    # Configure role chains — all roles use OpenRouter with Claude Sonnet 4
+    default_model = os.environ.get("FORGE_MODEL", "anthropic/claude-sonnet-4-20250514")
+    chain_config = RoleChainConfig(chains={
+        Role.CLARIFICATION: [ChainEntry(provider="openrouter", model=default_model)],
+        Role.ARCHITECT: [ChainEntry(provider="openrouter", model=default_model)],
+        Role.PLANNER: [ChainEntry(provider="openrouter", model=default_model)],
+        Role.CODER: [ChainEntry(provider="openrouter", model=default_model)],
+        Role.REVIEWER: [ChainEntry(provider="openrouter", model=default_model)],
+        Role.DOC_WRITER: [ChainEntry(provider="openrouter", model=default_model)],
+        Role.INTERRUPT_HANDLER: [ChainEntry(provider="openrouter", model=default_model)],
+    })
+
     # registry_checker: returns True if any healthy capability has the given provider_name
     def _check_provider(name: str) -> bool:
         return any(
@@ -153,9 +196,9 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
         )
 
     model_router = ModelRouter(
-        chain_config=RoleChainConfig(),
+        chain_config=chain_config,
         registry_checker=_check_provider,
-        call_adapter=_noop_call_adapter,
+        call_adapter=call_adapter,
         event_emitter=event_bus.publish,
         session_id="system",
     )
