@@ -18,6 +18,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 
 from app.api.auth import require_auth
+from app.api.errors import register_error_handlers
 from app.runtime.models import ForgeState
 from app.workflow.bootstrap import assemble_deps, bootstrap
 
@@ -71,9 +72,12 @@ async def _lifespan(app: FastAPI):
         inspector=deps.inspector,
         interrupt_handler=deps.interrupt_handler,
         event_store=event_store,
+        config_service=deps.config_service,
     )
     # Set directly on the module global (most reliable method)
     api_module._deps = api_deps
+    # Also store config_service directly on the module for easy access by config routes
+    api_module._config_service = deps.config_service
 
     logger.info(
         "API layer wired to RuntimeDeps (inspector=%s, session_manager=%s, interrupt_handler=%s)",
@@ -121,6 +125,9 @@ def create_app() -> FastAPI:
         dependencies=[Depends(require_auth)],
     )
 
+    # Register structured error handlers (ErrorEnvelope format)
+    register_error_handlers(app)
+
     # ──────────────────────────────────────────────────────────────────
     # Mount the sessions/control/inspection/WebSocket endpoints from the
     # API layer. These are defined in app.api and include:
@@ -147,6 +154,11 @@ def create_app() -> FastAPI:
 
     # Store the event store so the lifespan can wire it
     app.state.event_store = event_store
+
+    # Mount the config API router
+    from app.api.config import config_router
+
+    app.include_router(config_router)
 
     @app.post("/workflow/invoke", response_model=InvokeResponse)
     async def invoke_workflow(request: InvokeRequest) -> InvokeResponse:
@@ -195,9 +207,77 @@ def create_app() -> FastAPI:
             node_path=final_state.get("node_path", []),
         )
 
-    @app.get("/health")
-    async def health_check() -> dict[str, str]:
-        """Basic health check endpoint."""
-        return {"status": "ok"}
+    @app.get("/health", dependencies=[])
+    async def health_check() -> dict[str, Any]:
+        """Enhanced health check endpoint — no authentication required.
+
+        Returns per-component health status, overall aggregated status,
+        and configured boolean. Suitable for container orchestrator probes.
+        """
+        import app.api as api_module
+
+        # Critical components: openrouter, database
+        # Non-critical components: github, docker, event_bus
+        critical_components = {"openrouter", "database"}
+
+        # Default component health when ConfigService is not available
+        default_components = {
+            "openrouter": {"status": "healthy", "message": ""},
+            "github": {"status": "healthy", "message": ""},
+            "docker": {"status": "healthy", "message": ""},
+            "database": {"status": "healthy", "message": ""},
+            "event_bus": {"status": "healthy", "message": ""},
+        }
+
+        configured = False
+        components = default_components
+
+        # Try to get real health from ConfigService
+        config_service = getattr(api_module, "_config_service", None)
+        if config_service is None:
+            # Also try from deps
+            deps_obj = getattr(api_module, "_deps", None)
+            if deps_obj is not None:
+                config_service = getattr(deps_obj, "config_service", None)
+
+        if config_service is not None:
+            try:
+                config_data = await config_service.get_config()
+                configured = config_data.get("configured", False)
+            except Exception:
+                configured = False
+
+            try:
+                health_data = await config_service.get_component_health()
+                components = {}
+                for name, comp_health in health_data.items():
+                    if hasattr(comp_health, "status"):
+                        components[name] = {
+                            "status": comp_health.status,
+                            "message": getattr(comp_health, "message", ""),
+                        }
+                    else:
+                        components[name] = comp_health
+            except Exception:
+                pass
+
+        # Aggregate status
+        overall = "healthy"
+        for name, comp in components.items():
+            comp_status = comp.get("status", "healthy") if isinstance(comp, dict) else getattr(comp, "status", "healthy")
+            if comp_status == "unhealthy":
+                if name in critical_components:
+                    overall = "unhealthy"
+                    break
+                else:
+                    overall = "degraded"
+            elif comp_status == "degraded" and overall == "healthy":
+                overall = "degraded"
+
+        return {
+            "status": overall,
+            "configured": configured,
+            "components": components,
+        }
 
     return app

@@ -36,6 +36,14 @@ async def bootstrap(deps: RuntimeDeps) -> None:
     """
     config_dir = Path(deps.config_dir)
 
+    # Step 0: Load ConfigService configuration
+    if deps.config_service is not None:
+        try:
+            await deps.config_service.load()
+            logger.info("ConfigService loaded configuration")
+        except Exception as exc:
+            logger.warning("ConfigService load failed: %s. Continuing with defaults.", exc)
+
     # Step 1–3: Discovery (load config, probe resources, register healthy ones)
     # Discovery handles config validation, probing, and registration internally
     if config_dir.exists():
@@ -87,6 +95,13 @@ async def bootstrap(deps: RuntimeDeps) -> None:
     mode_result = await deps.mode_evaluator.evaluate_and_emit()
     logger.info("Operational mode: %s", mode_result.mode.value)
 
+    # Step 6: Wire ConfigService to deps for hot-reload
+    if deps.config_service is not None:
+        deps.config_service.set_deps(deps)
+        # Apply loaded config to runtime (model router, sandbox mode, API key)
+        deps.config_service.apply_to_runtime()
+        logger.info("ConfigService wired to RuntimeDeps for hot-reload")
+
     logger.info("Bootstrap complete — forge.ready emitted")
 
 
@@ -110,6 +125,7 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
     """
     import os
     from app.runtime.audit import AuditTrail
+    from app.runtime.config import ConfigService
     from app.runtime.events.bus import EventBus
     from app.runtime.health import HealthMonitor, HealthMonitorConfig
     from app.runtime.inspector import RuntimeInspector
@@ -237,6 +253,13 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
         session_id="system",
     )
 
+    # ConfigService — runtime config manager
+    config_path = Path(os.environ.get("FORGE_CONFIG_PATH", "/data/forge-config.json"))
+    config_service = ConfigService(
+        config_path=config_path,
+        event_emitter=event_bus.publish,
+    )
+
     return RuntimeDeps(
         event_bus=event_bus,
         registry=registry,
@@ -253,6 +276,7 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
         policy_engine=policy_engine,
         learning_recorder=learning_recorder,
         health_monitor=health_monitor,
+        config_service=config_service,
         config_dir=config_dir,
     )
 

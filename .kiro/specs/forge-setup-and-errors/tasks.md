@@ -6,7 +6,7 @@ This plan implements the Configuration & Setup system and Error Surfacing system
 
 ## Tasks
 
-- [ ] 1. ConfigService Core
+- [x] 1. ConfigService Core
   - [x] 1.1 Create ConfigService with ConfigState model and persistence
     - Create `backend/app/runtime/config/__init__.py`
     - Define `SandboxMode` enum (always, auto, never)
@@ -24,12 +24,12 @@ This plan implements the Configuration & Setup system and Error Surfacing system
     - Raise `ConfigValidationError` with per-field error details on invalid payloads
     - _Requirements: 1.3, 1.4, 1.6_
 
-  - [~] 1.3 Implement apply_to_runtime for hot-reload of configuration
+  - [x] 1.3 Implement apply_to_runtime for hot-reload of configuration
     - Implement `apply_to_runtime(deps)` — update model router chain config with new model, update sandbox mode policy
     - Ensure no restart required after PUT /config
     - _Requirements: 1.3_
 
-  - [~] 1.4 Write unit tests for ConfigService
+  - [x] 1.4 Write unit tests for ConfigService
     - Test load from valid JSON file
     - Test load with missing file returns defaults
     - Test load with corrupt JSON returns defaults and emits error
@@ -38,8 +38,8 @@ This plan implements the Configuration & Setup system and Error Surfacing system
     - Test update validation rejects invalid payloads
     - Test config round-trip: save then load preserves all fields
 
-- [ ] 2. API Key Testing
-  - [~] 2.1 Implement key testing for OpenRouter
+- [x] 2. API Key Testing
+  - [x] 2.1 Implement key testing for OpenRouter
     - Make GET request to OpenRouter `/api/v1/models` with provided key in Authorization header
     - 10-second timeout via httpx
     - On success: return KeyTestResult(success=True, latency_ms, details={models_available: count})
@@ -47,7 +47,7 @@ This plan implements the Configuration & Setup system and Error Surfacing system
     - On timeout: return KeyTestResult(success=False, error="Request timed out after 10 seconds")
     - _Requirements: 3.1, 3.3, 3.4, 3.5_
 
-  - [~] 2.2 Implement key testing for GitHub
+  - [x] 2.2 Implement key testing for GitHub
     - Make GET request to GitHub `/user` with Bearer token
     - 10-second timeout via httpx
     - On success: return KeyTestResult(success=True, latency_ms, details={username: str})
@@ -55,7 +55,7 @@ This plan implements the Configuration & Setup system and Error Surfacing system
     - On timeout: return KeyTestResult(success=False, error="Request timed out after 10 seconds")
     - _Requirements: 3.2, 3.3, 3.4_
 
-  - [~] 2.3 Write unit tests for key testing
+  - [x] 2.3 Write unit tests for key testing
     - Mock httpx responses for success, auth error, timeout for both OpenRouter and GitHub
     - Verify latency_ms is captured correctly
     - Verify error messages match documented format
@@ -87,7 +87,7 @@ This plan implements the Configuration & Setup system and Error Surfacing system
     - Test sandbox_mode interactions with Docker availability
 
 - [ ] 4. Error Envelope and Exception Handlers
-  - [~] 4.1 Create ErrorEnvelope model and ErrorCategory enum
+  - [x] 4.1 Create ErrorEnvelope model and ErrorCategory enum
     - Create `backend/app/api/errors.py`
     - Define `ErrorCategory` enum: configuration, runtime, workflow, connection
     - Define `ErrorEnvelope` dataclass with code, message, category, recoverable, timestamp, suggestion

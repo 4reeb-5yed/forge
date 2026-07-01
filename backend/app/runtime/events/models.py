@@ -58,6 +58,11 @@ class EventType(str, Enum):
 
     # Approval gates
     APPROVAL_PENDING = "approval.pending"
+
+    # Error events
+    CONFIG_ERROR = "error.config"
+    RUNTIME_ERROR = "error.runtime"
+    WORKFLOW_ERROR = "error.workflow"
     APPROVAL_REJECTED = "approval.rejected"
 
     # Documentation

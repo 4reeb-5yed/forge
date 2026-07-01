@@ -74,6 +74,9 @@ class RuntimeDeps:
     # Coding tool (SandboxedAiderTool or AiderTool, wired during bootstrap)
     coding_tool: Any = None
 
+    # ConfigService (wired during bootstrap)
+    config_service: Any = None
+
     # Configuration paths (for bootstrap)
     config_dir: str = "config"
 
