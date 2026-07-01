@@ -71,6 +71,9 @@ class RuntimeDeps:
         default_factory=lambda: _default_budget_factory
     )
 
+    # Coding tool (SandboxedAiderTool or AiderTool, wired during bootstrap)
+    coding_tool: Any = None
+
     # Configuration paths (for bootstrap)
     config_dir: str = "config"
 

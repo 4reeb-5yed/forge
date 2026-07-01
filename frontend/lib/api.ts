@@ -32,7 +32,7 @@ export interface InvokePayload {
 export interface InvokeResponse {
   status: string;
   commit_shas?: string[];
-  errors?: string[];
+  errors?: Array<{ code?: string; message?: string; node?: string }>;
   node_path?: string[];
 }
 
@@ -159,8 +159,13 @@ export function connectEventStream(
   onError?: (error: Event) => void,
   onClose?: () => void
 ): WebSocket {
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${protocol}//${window.location.host}/api/sessions/${sessionId}/events`;
+  // WebSocket connects directly to the backend — Next.js rewrites only handle HTTP.
+  // In production, this should be configured via an env var (NEXT_PUBLIC_WS_URL).
+  const backendHost =
+    typeof window !== "undefined" && process.env.NEXT_PUBLIC_WS_URL
+      ? process.env.NEXT_PUBLIC_WS_URL
+      : "ws://localhost:8000";
+  const wsUrl = `${backendHost}/sessions/${sessionId}/events`;
   const ws = new WebSocket(wsUrl);
 
   ws.onmessage = (msg) => {

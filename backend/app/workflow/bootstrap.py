@@ -17,7 +17,6 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from app.runtime.events.models import Event, EventType
 from app.workflow.deps import RuntimeDeps
 
 logger = logging.getLogger(__name__)
@@ -66,25 +65,9 @@ async def bootstrap(deps: RuntimeDeps) -> None:
     except Exception as exc:
         logger.warning("Health monitor failed to start: %s", exc)
 
-    # Step 5: Evaluate operational mode
+    # Step 5: Evaluate operational mode (also emits forge.ready per requirement 13.7)
     mode_result = await deps.mode_evaluator.evaluate_and_emit()
     logger.info("Operational mode: %s", mode_result.mode.value)
-
-    # Step 6: Emit forge.ready event
-    ready_event = Event.create(
-        type=EventType.FORGE_READY,
-        session_id="system",
-        source="bootstrap",
-        payload={
-            "mode": mode_result.mode.value,
-            "can_operate": mode_result.summary.can_operate,
-            "available_capabilities": len(mode_result.summary.available),
-            "startup_report": mode_result.startup_report,
-        },
-        correlation_id="system",
-        event_id="forge_ready_bootstrap",
-    )
-    await deps.event_bus.publish(ready_event)
 
     logger.info("Bootstrap complete — forge.ready emitted")
 
@@ -162,9 +145,16 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
     event_bus.subscribe("*", audit_trail.handle_event, subscriber_id="audit_trail")
 
     # AI routing — uses empty chain config (no providers configured yet)
+    # registry_checker: returns True if any healthy capability has the given provider_name
+    def _check_provider(name: str) -> bool:
+        return any(
+            entry.provider_name == name and entry.healthy
+            for entry in registry._entries.values()
+        )
+
     model_router = ModelRouter(
         chain_config=RoleChainConfig(),
-        registry_checker=lambda name: registry.has_by_name(name) if hasattr(registry, "has_by_name") else False,
+        registry_checker=_check_provider,
         call_adapter=_noop_call_adapter,
         event_emitter=event_bus.publish,
         session_id="system",
@@ -213,6 +203,7 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
         recovery=recovery,
         model_router=model_router,
         workspace_manager=workspace_manager,
+        coding_tool=coding_tool,
         inspector=inspector,
         interrupt_handler=interrupt_handler,
         mode_evaluator=mode_evaluator,

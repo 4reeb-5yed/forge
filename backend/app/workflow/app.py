@@ -14,9 +14,10 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 
+from app.api.auth import require_auth
 from app.runtime.models import ForgeState
 from app.workflow.bootstrap import assemble_deps, bootstrap
 
@@ -116,6 +117,7 @@ def create_app() -> FastAPI:
         description="Autonomous Software Engineering Runtime",
         version="0.1.0",
         lifespan=_lifespan,
+        dependencies=[Depends(require_auth)],
     )
 
     # ──────────────────────────────────────────────────────────────────

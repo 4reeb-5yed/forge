@@ -196,24 +196,22 @@ class TestBootstrap:
         await deps.health_monitor.stop()
 
     async def test_bootstrap_emits_forge_ready(self):
-        """Bootstrap emits forge.ready event."""
+        """Bootstrap emits forge.ready event (via ModeEvaluator.evaluate_and_emit)."""
         from app.workflow.bootstrap import assemble_deps, bootstrap
 
         deps = assemble_deps(config_dir="nonexistent_test_config_dir")
 
-        # Track published events
+        # Track published events via subscription (not monkeypatching)
         published_events = []
-        original_publish = deps.event_bus.publish
 
-        async def tracking_publish(event):
+        async def capture_event(event):
             published_events.append(event)
-            return await original_publish(event)
 
-        deps.event_bus.publish = tracking_publish
+        deps.event_bus.subscribe("*", capture_event, subscriber_id="test_capture")
 
         await bootstrap(deps)
 
-        # Check that forge.ready was emitted
+        # Check that forge.ready was emitted (by ModeEvaluator)
         ready_events = [
             e for e in published_events
             if hasattr(e, "type") and e.type.value == "forge.ready"

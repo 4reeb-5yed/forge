@@ -1,0 +1,21 @@
+# Forge adapter configuration — loaded during bootstrap discovery.
+# Each adapter listed here will be probed for health during startup.
+
+adapters:
+  - name: openrouter
+    enabled: true
+    kind: ai_provider
+    roles: [coder, reviewer, architect]
+    provider_name: openrouter
+
+  - name: github
+    enabled: true
+    kind: vcs
+    roles: []
+    provider_name: github
+
+  - name: aider
+    enabled: true
+    kind: coding_tool
+    roles: []
+    provider_name: aider
