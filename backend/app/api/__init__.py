@@ -163,12 +163,14 @@ class AppDependencies:
         interrupt_handler: InterruptHandler | None = None,
         event_store: SessionEventStore | None = None,
         config_service: Any = None,
+        approval_manager: Any = None,
     ) -> None:
         self.session_manager = session_manager or SessionManager()
         self.inspector = inspector
         self.interrupt_handler = interrupt_handler or InterruptHandler()
         self.event_store = event_store or SessionEventStore()
         self.config_service = config_service
+        self.approval_manager = approval_manager
 
 
 # Module-level dependencies (set during app startup)

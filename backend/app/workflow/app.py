@@ -96,6 +96,7 @@ async def _lifespan(app: FastAPI):
         interrupt_handler=deps.interrupt_handler,
         event_store=event_store,
         config_service=deps.config_service,
+        approval_manager=approval_manager,
     )
     # Set directly on the module global (most reliable method)
     api_module._deps = api_deps
