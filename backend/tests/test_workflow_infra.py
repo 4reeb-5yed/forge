@@ -244,7 +244,14 @@ class TestCreateApp:
         from app.workflow.app import create_app
 
         app = create_app()
-        routes = [r.path for r in app.routes]
+        routes = []
+        for route in app.routes:
+            if hasattr(route, 'path'):
+                routes.append(route.path)
+            elif hasattr(route, 'routes'):
+                for sub in route.routes:
+                    if hasattr(sub, 'path'):
+                        routes.append(sub.path)
         assert "/workflow/invoke" in routes
 
     def test_app_has_health_route(self):
@@ -252,5 +259,12 @@ class TestCreateApp:
         from app.workflow.app import create_app
 
         app = create_app()
-        routes = [r.path for r in app.routes]
+        routes = []
+        for route in app.routes:
+            if hasattr(route, 'path'):
+                routes.append(route.path)
+            elif hasattr(route, 'routes'):
+                for sub in route.routes:
+                    if hasattr(sub, 'path'):
+                        routes.append(sub.path)
         assert "/health" in routes
