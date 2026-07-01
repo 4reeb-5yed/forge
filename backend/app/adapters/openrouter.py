@@ -107,6 +107,11 @@ class OpenRouterProvider:
                     provider="openrouter",
                     error_type="auth_failure",
                 )
+            # ResourceExhausted — wait before raising so retry has a chance
+            if "ResourceExhausted" in error_msg or "limit" in error_msg.lower():
+                import asyncio
+                logger.warning("Model capacity exhausted, waiting 5s before retry: %s", error_msg[:100])
+                await asyncio.sleep(5)
             raise RuntimeError(f"OpenRouter error: {error_msg}")
 
         try:
