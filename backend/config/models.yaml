@@ -1,9 +1,5 @@
 # AI Provider and Model Configuration
 # Maps roles to ordered provider chains for the Model Router.
-#
-# NOTE: Only 'openrouter' is currently implemented as an adapter.
-# Until OpenAI/Anthropic adapters exist and are registered in the capability
-# registry, only openrouter entries will resolve successfully.
 
 roles:
   clarification:
@@ -41,15 +37,8 @@ roles:
       - provider: openrouter
         model: nvidia/nemotron-3-ultra-550b-a55b:free
 
-# Provider configurations (for future adapters)
-# Uncomment and configure when implementing additional providers
-# providers:
-#   openai:
-#     base_url: "${OPENAI_API_BASE_URL}"
-#     api_key_env: "OPENAI_API_KEY"
-#     timeout_s: 60
-#
-#   anthropic:
-#     base_url: "${ANTHROPIC_API_BASE_URL}"
-#     api_key_env: "ANTHROPIC_API_KEY"
-#     timeout_s: 60
+providers:
+  openrouter:
+    base_url: "https://openrouter.ai/api/v1"
+    api_key_env: "OPENROUTER_API_KEY"
+    timeout_s: 120

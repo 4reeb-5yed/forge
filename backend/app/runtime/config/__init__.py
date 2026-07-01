@@ -229,7 +229,7 @@ class ConfigService:
 
         Handles three cases:
         1. File exists and is valid JSON → deserialize to ConfigState
-        2. File does not exist → use defaults (unconfigured)
+        2. File does not exist → use env vars as fallback
         3. File exists but contains corrupt JSON → log error, use defaults,
            emit CONFIG_ERROR event
 
@@ -238,9 +238,20 @@ class ConfigService:
         """
         if not self._config_path.exists():
             logger.info(
-                "Config file not found at %s, using defaults", self._config_path
+                "Config file not found at %s, checking environment variables", self._config_path
             )
-            self._state = ConfigState()
+            # Use environment variables as fallback
+            state = ConfigState()
+            state.openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
+            state.github_token = os.environ.get("GITHUB_TOKEN", "")
+            state.selected_model = os.environ.get("FORGE_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
+            sandbox_env = os.environ.get("FORGE_USE_SANDBOX", "auto")
+            try:
+                state.sandbox_mode = SandboxMode(sandbox_env)
+            except ValueError:
+                state.sandbox_mode = SandboxMode.AUTO
+            self._state = state
+            self._last_openrouter_key = self._state.openrouter_api_key
             return self._state
 
         try:
@@ -251,14 +262,19 @@ class ConfigService:
             logger.info("Configuration loaded from %s", self._config_path)
         except (json.JSONDecodeError, ValueError) as exc:
             logger.error(
-                "Corrupt config file at %s: %s. Using defaults.",
+                "Corrupt config file at %s: %s. Using environment variables.",
                 self._config_path,
                 exc,
             )
-            self._state = ConfigState()
+            # Fall back to environment variables
+            state = ConfigState()
+            state.openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
+            state.github_token = os.environ.get("GITHUB_TOKEN", "")
+            state.selected_model = os.environ.get("FORGE_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
+            self._state = state
             await self._emit_config_error(
                 code="CONFIG_FILE_CORRUPT",
-                message=f"Configuration file is corrupt: {exc}. Using defaults.",
+                message=f"Configuration file is corrupt: {exc}. Using environment variables.",
                 component="config_service",
                 recoverable=True,
                 suggestion="Reconfigure Forge via the Setup Wizard to overwrite the corrupt file.",
