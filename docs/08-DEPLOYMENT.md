@@ -94,13 +94,94 @@ curl http://localhost:8000/health
 # {"status": "ok"}
 ```
 
+## Production Features
+
+### PostgreSQL Persistence
+
+All persistent stores are backed by PostgreSQL when `DATABASE_URL` is configured:
+
+| Store | Purpose | API |
+|-------|---------|-----|
+| Session Store | Session lifecycle and state | `/sessions/*` |
+| Audit Store | Event stream persistence | `/sessions/{id}/events` |
+| Checkpoint Store | Crash recovery snapshots | `/recovery/*` |
+| Learning Store | Outcome recording | Internal |
+
+The stores are auto-wired during bootstrap when `DATABASE_URL` is available. Falls back to in-memory for development without a database.
+
+### Approval Gates
+
+Human-in-the-loop approval before commits:
+
+```
+Build → Approval Required → Human Reviews Diff → Approve/Reject → Commit
+```
+
+| API Endpoint | Description |
+|--------------|-------------|
+| `GET /approval/pending/{session_id}` | List pending approvals |
+| `GET /approval/{request_id}/diff` | Get full diff for review |
+| `POST /approval/{request_id}/approve` | Approve changes |
+| `POST /approval/{request_id}/reject` | Reject changes |
+
+Frontend shows an `ApprovalBanner` when builds await review.
+
+### Concurrent Builds
+
+Multiple builds run in parallel with configurable limits:
+
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `FORGE_MAX_CONCURRENT` | `3` | Maximum concurrent sessions |
+
+The `SessionScheduler` manages a priority queue and executes builds based on availability.
+
+### Build Timeouts
+
+Auto-stop builds exceeding the configured timeout:
+
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `FORGE_BUILD_TIMEOUT_SECONDS` | `1800` (30 min) | Build timeout |
+
+The `BuildTimeoutManager` tracks active builds and issues stop signals on timeout.
+
+### Checkpoint Recovery
+
+Automatic workflow state persistence for crash recovery:
+
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `FORGE_CHECKPOINT_INTERVAL` | `60` | Seconds between checkpoints (0=disabled) |
+
+Checkpoints are saved after each node execution with sensitive data redacted. Use the recovery API to resume interrupted builds.
+
+| API Endpoint | Description |
+|--------------|-------------|
+| `GET /recovery/sessions` | List recoverable sessions |
+| `GET /recovery/sessions/{id}` | Get checkpoint data |
+| `POST /recovery/sessions/{id}/resume` | Resume from checkpoint |
+
+### Learning Engine
+
+Pattern analysis for model/provider health:
+
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `FORGE_LEARNING_WINDOW_DAYS` | `7` | Analysis window in days |
+
+Analyzes outcomes to generate recommendations for:
+- Model performance (success rates, latency)
+- Provider health (uptime, circuit breaker trips)
+- Task patterns (retry-heavy, unreliable)
+
 ## Environment Variables
 
 ### Complete Reference
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `DATABASE_URL` | Yes (Docker) | — | PostgreSQL connection string |
+| `DATABASE_URL` | Production | — | PostgreSQL connection string |
 | `DATABASE_POOL_SIZE` | No | `10` | Max connection pool size |
 | `OPENROUTER_API_KEY` | Yes | — | OpenRouter API key for AI completions |
 | `GITHUB_TOKEN` | Yes | — | GitHub personal access token |
@@ -110,7 +191,11 @@ curl http://localhost:8000/health
 | `FORGE_ENV` | No | `production` | Environment name |
 | `FORGE_LOG_LEVEL` | No | `INFO` | Logging level |
 | `FORGE_CONFIG_DIR` | No | `./config` | Path to YAML config directory |
-| `FORGE_USE_SANDBOX` | No | `auto` | Sandbox mode: `auto`, `always`, or `never` |
+| `FORGE_USE_SANDBOX` | No | `always` | Sandbox mode: `always` (recommended), `auto`, or `never` |
+| `FORGE_MAX_CONCURRENT` | No | `3` | Max concurrent builds |
+| `FORGE_BUILD_TIMEOUT_SECONDS` | No | `1800` | Build timeout in seconds |
+| `FORGE_CHECKPOINT_INTERVAL` | No | `60` | Checkpoint interval in seconds |
+| `FORGE_LEARNING_WINDOW_DAYS` | No | `7` | Learning analysis window |
 | `NEXT_PUBLIC_WS_URL` | No | `ws://localhost:8000` | WebSocket URL for frontend event stream |
 | `SESSION_MAX_TOKENS` | No | `1000000` | Max tokens per session budget |
 | `HEALTH_MONITOR_INTERVAL_S` | No | `30` | Health check interval in seconds |
@@ -131,8 +216,20 @@ GITHUB_TOKEN=ghp_your-github-token
 # Coding Tool
 AIDER_MODEL=claude-sonnet-4-20250514
 
-# Sandbox (auto=use Docker if available, always=require Docker, never=no sandbox)
-FORGE_USE_SANDBOX=auto
+# Sandbox (always=recommended for production, auto=use if available, never=disable)
+FORGE_USE_SANDBOX=always
+
+# Concurrent Builds
+FORGE_MAX_CONCURRENT=3
+
+# Build Timeout (30 minutes default)
+FORGE_BUILD_TIMEOUT_SECONDS=1800
+
+# Checkpoint Recovery (60 seconds interval)
+FORGE_CHECKPOINT_INTERVAL=60
+
+# Learning Engine (7 day analysis window)
+FORGE_LEARNING_WINDOW_DAYS=7
 
 # Authentication
 FORGE_API_TOKEN=your-secret-api-token
@@ -181,6 +278,7 @@ npm run dev
 - **Build the sandbox image** — `docker build -t forge-aider-sandbox:latest -f Dockerfile.sandbox .`
 - **Set `FORGE_USE_SANDBOX=always`** in production for fail-closed sandbox enforcement
 - **Monitor `commit_blocked` events** in the audit trail for signs of AI attempting sensitive modifications
+- **Use approval gates** — Require human review before commits in production
 
 See [Security](./12-SECURITY.md) for the complete security model.
 
@@ -192,9 +290,11 @@ See [Security](./12-SECURITY.md) for the complete security model.
 
 ### Monitoring
 
-- **Health endpoint:** `GET /health` returns `{"status": "ok"}`
+- **Health endpoint:** `GET /health` returns per-component health status
 - **Structured logging:** JSON logs with session_id correlation
 - **Event audit:** All operations are recorded in the audit_log table
+- **Approval events:** `approval.requested`, `approval.approved`, `approval.rejected`
+- **Timeout events:** `build.timeout.started`, `build.timeout.exceeded`
 - **Metrics:** Export from the health monitor (future: Prometheus endpoint)
 
 ### Resource Limits
@@ -217,7 +317,7 @@ deploy:
 
 Forge v1 runs as a single asyncio process. This is sufficient for:
 - Single-tenant use
-- Low-concurrency workloads (1–5 concurrent sessions)
+- Low-concurrency workloads (1–5 concurrent sessions by default)
 - Development and evaluation
 
 ### Scaling Strategy
@@ -240,6 +340,7 @@ graph TB
 3. **Workspace isolation** — Each instance needs its own workspace volume
 4. **Event ordering** — Per-session event sequences must remain ordered (handled by DB constraint)
 5. **Health monitor** — Each instance runs its own; registry state is local
+6. **Concurrent builds** — Each instance manages its own `SessionScheduler`
 
 ### Future: Worker Architecture
 
