@@ -214,6 +214,8 @@ class SandboxedAiderTool:
             "--read-only",
             # Security: writable tmpfs for temp files only
             "--tmpfs", "/tmp:rw,noexec,nosuid,size=512m",
+            # Aider needs a writable home directory for its cache
+            "--tmpfs", "/home/sandbox:rw,noexec,nosuid,size=256m",
             # Security: drop all capabilities, add none back
             "--cap-drop", "ALL",
             # Security: no new privileges
