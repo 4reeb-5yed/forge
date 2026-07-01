@@ -60,7 +60,15 @@ def make_architect_node(deps: RuntimeDeps) -> NodeFn:
             data = json.loads(completion)
             spec_content = data.get("specification", completion)
             task_list = data.get("tasks", [])
-        except (json.JSONDecodeError, TypeError):
+
+            # Ensure all task IDs and dependencies are strings (required by Task model)
+            for t in task_list:
+                if "id" in t and not isinstance(t["id"], str):
+                    t["id"] = str(t["id"])
+                if "depends_on" in t:
+                    t["depends_on"] = [str(x) for x in t["depends_on"]]
+
+        except (json.JSONDecodeError, TypeError) as exc:
             spec_content = completion
             task_list = [
                 {"id": "task_1", "title": "Implement specification", "description": message, "depends_on": []}
