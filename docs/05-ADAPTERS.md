@@ -40,7 +40,7 @@ class OpenRouterProvider:
 
 ### Error Classification
 
-The adapter classifies HTTP errors into retryable and permanent:
+The adapter classifies HTTP errors into retryable and permanent, via `_classify_error()`:
 
 | HTTP Status | Classification | Behavior |
 |-------------|---------------|----------|
@@ -48,6 +48,15 @@ The adapter classifies HTTP errors into retryable and permanent:
 | 401, 403 | `PermanentError` | Circuit breaker opens, no retry |
 | 429 | Transient (rate limit) | RuntimeError, will be retried |
 | 5xx | Transient (server) | RuntimeError, will be retried |
+
+**Embedded errors in HTTP 200 responses:** OpenRouter sometimes returns HTTP 200 with an `error` key embedded in the JSON body instead of a non-200 status. `complete()` checks for this after a successful response and re-classifies based on `error.code`:
+
+| `error.code` | Classification | Behavior |
+|---------------|---------------|----------|
+| 401, 403 | `PermanentError` | Circuit breaker opens, no retry |
+| other | Transient | RuntimeError, will be retried |
+
+If the embedded error message contains `"ResourceExhausted"` or the word `"limit"` (case-insensitive) — indicating model capacity exhaustion or a rate-limit-like condition — the adapter `await asyncio.sleep(5)` before raising the `RuntimeError`, giving upstream retry logic a better chance of succeeding on the next attempt.
 
 ### Streaming
 
@@ -67,6 +76,8 @@ The `as_call_adapter()` method returns a closure matching the `ModelCallAdapter`
 ```python
 async def adapter(provider: str, model: str, messages: list, **kwargs) -> str
 ```
+
+Before forwarding `**kwargs` to `complete()`, the closure filters them through an `_ALLOWED_PARAMS` allow-list (`temperature`, `top_p`, `max_tokens`, `stop`, `presence_penalty`, `frequency_penalty`, `logit_bias`, `n`, `stream`, `response_format`, `seed`, `tools`, `tool_choice`). Any keys not in this list — such as internal routing params like `estimated_tokens` — are silently stripped and never reach the OpenRouter API.
 
 ---
 
@@ -100,7 +111,7 @@ class GitHubVCS:
 
 1. **Token injection:** Transforms `https://github.com/owner/repo` into `https://{token}@github.com/owner/repo`
 2. **Never logged:** The `_run_git()` method never logs arguments that might contain the token
-3. **Sanitized errors:** All error messages pass through `_sanitize()` which replaces the token with `***`
+3. **Sanitized errors (clone/push only):** Error messages from `clone()` and `push()` pass through `_sanitize()`, which replaces the token with `***`. Error messages from `commit()` (`git add failed`, `git commit failed`, `git rev-parse failed`) are raised unsanitized — low risk since the token is not part of the commit command, but be aware these paths do not call `_sanitize()`
 4. **Memory-only:** Token lives only in the adapter instance, never serialized
 
 ### Clone Strategy
@@ -124,6 +135,75 @@ await vcs.push(workspace_path)                      # 3. git push
 
 ---
 
+## OpenHands Cloud Coding Tool
+
+**File:** `backend/app/adapters/openhands.py`
+
+### What It Does
+
+Uses the [OpenHands Cloud](https://app.all-hands.dev) API to execute coding tasks against a GitHub repository. Unlike the Aider variants, OpenHands is a hosted service — it selects its own AI model internally (including a free tier), runs the sandboxed execution on OpenHands' infrastructure, and commits results to the repo itself. Forge only creates the conversation and polls for completion.
+
+### Priority in coding tool selection
+
+`bootstrap.py`'s `_create_coding_tool()` picks the coding tool with this priority order:
+
+1. **OpenHandsTool** — used automatically whenever `OPENHANDS_API_KEY` is set, regardless of Docker availability
+2. **SandboxedAiderTool** — used if Docker is available and OpenHands is not configured
+3. **AiderTool** (direct, unsandboxed) — fallback when neither OpenHands nor Docker is available
+
+OpenHands is checked **first**, ahead of both Aider variants — if `OPENHANDS_API_KEY` is set, Aider is never used.
+
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENHANDS_API_KEY` | — | Required, no fallback. If unset, `execute()` returns a failed `ToolResult` and `health_check()` reports unhealthy |
+| Timeout | 300s (5 min) | Total time allowed for the conversation to reach `STOPPED` status |
+| Poll interval | 5s | Time between status polls |
+
+### Class: `OpenHandsTool`
+
+```python
+class OpenHandsTool:
+    name = "openhands"
+
+    async def execute(task_description: str, workspace_path: str, repo_url: str = "") -> ToolResult
+    async def health_check() -> Health
+```
+
+### API Flow
+
+1. **Extract repo id:** `repo_url` (e.g. `https://github.com/owner/repo.git`) is reduced to `owner/repo` via `_extract_repo_id()`.
+2. **Create conversation:** `POST https://app.all-hands.dev/api/conversations` with body:
+   ```json
+   {
+     "repository": "owner/repo",
+     "initial_user_msg": "<task_description>"
+   }
+   ```
+   A non-200 response returns a failed `ToolResult` immediately with the status code and response body (truncated to 200 chars).
+3. **Poll for completion:** `GET https://app.all-hands.dev/api/conversations/{conversation_id}` every `POLL_INTERVAL` (5s), until either:
+   - `status == "STOPPED"` → returns a successful `ToolResult`
+   - the overall `timeout` (default 300s) elapses → returns a failed `ToolResult` with a timeout error
+   - `STARTING` / `RUNNING` statuses (or any other unrecognized status, or a poll request error) simply continue polling
+
+### Authentication
+
+Unlike OpenRouter and GitHub, OpenHands does **not** use an `Authorization: Bearer` header. It uses a custom header instead:
+
+```python
+{
+    "X-Session-API-Key": self._api_key,
+    "Content-Type": "application/json",
+}
+```
+
+### Health Check
+
+`health_check()` calls `GET /conversations?limit=1`. If `OPENHANDS_API_KEY` is not set, it short-circuits to unhealthy without making a request. A `200` response means healthy; any other status or exception is reported unhealthy.
+
+---
+
 ## Aider Coding Tool
 
 **File:** `backend/app/adapters/aider_tool.py`
@@ -138,8 +218,10 @@ Spawns [Aider](https://aider.chat) as a subprocess to execute coding tasks. Aide
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AIDER_MODEL` | `claude-sonnet-4-20250514` | Model for Aider to use |
+| `AIDER_MODEL` | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` | Model for Aider to use |
 | Timeout | 300s (5 min) | Process kill on timeout |
+
+> **Different default from SandboxedAiderTool:** `AiderTool`'s hardcoded `DEFAULT_MODEL` (`openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`, a free-tier model) is **not the same** as `SandboxedAiderTool`'s hardcoded `DEFAULT_MODEL` (`claude-sonnet-4-20250514`, see below). Both read from the same `AIDER_MODEL` env var if set, but if unset they fall back to different values. Don't assume the two tools share configuration — check the source of the tool actually in use.
 
 ### Class: `AiderTool`
 

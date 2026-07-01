@@ -1,50 +1,73 @@
 # Testing
 
-Forge has 1,343+ tests covering the runtime, workflow, and adapters. The test suite uses pytest with Hypothesis for property-based testing.
+Forge has 1,352 tests covering the runtime, workflow, and adapters. The test suite uses pytest with Hypothesis for property-based testing.
 
 ## Test Organization
 
 ```
 backend/tests/
-├── test_event_bus.py              # EventBus unit tests
-├── test_event_bus_properties.py   # EventBus property-based tests
-├── test_registry.py               # CapabilityRegistry tests
-├── test_registry_properties.py    # Registry property-based tests
-├── test_router.py                 # ModelRouter tests
-├── test_router_properties.py      # Router property-based tests
-├── test_session.py                # SessionManager tests
-├── test_audit.py                  # AuditTrail tests
-├── test_budget.py                 # SessionBudget tests
-├── test_budget_properties.py      # Budget property-based tests
-├── test_policies.py               # PolicyEngine tests
-├── test_policy_engine.py          # PolicyEngine extended tests
-├── test_workspace.py              # WorkspaceManager tests
-├── test_verification.py           # VerificationPipeline tests
-├── test_health.py                 # HealthMonitor tests
-├── test_discovery.py              # Discovery tests
-├── test_inspector.py              # RuntimeInspector tests
-├── test_interrupt.py              # InterruptHandler tests
-├── test_recovery.py               # CrashRecovery tests
-├── test_learning.py               # LearningRecorder tests
-├── test_mode.py                   # ModeEvaluator tests
-├── test_secrets.py                # SecretHolder tests
-├── test_boundaries.py             # Boundary enforcement tests
-├── test_classifier.py             # IntentClassifier tests
-├── test_workflow_graph.py         # Graph construction tests
-├── test_workflow_nodes.py         # Node function tests
-├── test_workflow_routing.py       # Routing logic tests
 ├── test_adapters.py               # Adapter unit tests
 ├── test_api.py                    # API endpoint tests
-└── conftest.py                    # Shared fixtures
+├── test_audit.py                  # AuditTrail tests
+├── test_audit_properties.py       # Audit property-based tests (replay fidelity)
+├── test_auth.py                   # Authentication/authorization tests
+├── test_backpressure.py           # Streaming backpressure / bounded queue tests
+├── test_boundaries.py              # Boundary enforcement tests
+├── test_budget.py                 # SessionBudget tests
+├── test_budget_properties.py      # Budget property-based tests (budget safety)
+├── test_circuit_breaker.py        # ProviderCircuitBreaker / backoff / retry tests
+├── test_clarification.py          # Clarification workflow tests
+├── test_classifier.py             # IntentClassifier tests
+├── test_commit_finalization_docs.py  # Commit + finalization + documentation integration
+├── test_commit_workflow.py        # CommitWorkflow tests
+├── test_config_service.py         # ConfigService (get/update config, redaction) tests
+├── test_dependency_wiring.py      # RuntimeDeps/bootstrap wiring regression tests
+├── test_discovery.py              # Discovery tests
+├── test_discovery_properties.py   # Discovery property-based tests (discovery soundness)
+├── test_dispatcher.py             # TaskDispatcher / workspace isolation tests
+├── test_documentation.py          # DocumentationMaintenance (digital twin diff) tests
+├── test_event_bus.py              # EventBus unit tests
+├── test_event_properties.py       # Event property-based tests (ordering, causality)
+├── test_finalization.py           # Finalization node tests
+├── test_health_monitor.py         # HealthMonitor tests
+├── test_inspector.py              # RuntimeInspector tests
+├── test_inspector_properties.py   # Inspector property-based tests (explainability)
+├── test_intent_router.py          # Intent router tests
+├── test_interrupt.py              # InterruptHandler tests
+├── test_learning.py               # LearningRecorder tests
+├── test_mode_evaluation.py        # ModeEvaluator tests
+├── test_planner.py                # Planner tests
+├── test_planner_properties.py     # Planner property-based tests (plan acyclicity)
+├── test_policy_engine.py          # PolicyEngine tests
+├── test_property_doc_drift.py     # Documentation property-based tests (non-drift)
+├── test_protocols.py              # Plugin protocol interface / shared type tests
+├── test_recovery.py               # CrashRecovery tests
+├── test_registry.py               # CapabilityRegistry tests
+├── test_router.py                 # ModelRouter tests
+├── test_router_events.py          # ModelRouter event emission / budget integration tests
+├── test_router_properties.py      # Router property-based tests (routing soundness, fallback)
+├── test_sandboxed_aider.py        # SandboxedAiderTool (Docker sandbox) tests
+├── test_scope_check.py            # scope_check.py diff-scope verification tests
+├── test_secret_properties.py      # Secret property-based tests (non-leakage)
+├── test_secrets.py                # SecretHolder tests
+├── test_session.py                # SessionManager tests
+├── test_specification.py          # Specification generation tests
+├── test_verification.py           # VerificationPipeline tests
+├── test_verification_properties.py  # Verification property-based tests (merge order-independence)
+├── test_workflow_infra.py         # Workflow infra tests (routing, bootstrap, assemble_deps, app)
+├── test_workflow_nodes.py         # Node function tests
+├── test_workspace.py              # WorkspaceManager tests
+└── test_workspace_properties.py   # Workspace property-based tests (isolation)
 ```
+
+There is no `conftest.py` in `backend/tests/` — each test file defines its own fixtures/fakes inline.
 
 ### Test Categories
 
 | Category | Pattern | Count | Purpose |
 |----------|---------|-------|---------|
-| Unit | `test_*.py` | ~1,100 | Isolated module behavior |
-| Property-based | `test_*_properties.py` | ~140 | Invariant verification |
-| Integration | `test_api.py`, `test_workflow_*.py` | ~50 | Cross-module interaction |
+| Property-based | `test_*_properties.py` | 55 | Invariant verification |
+| Unit + Integration | `test_*.py` (all others) | 1,297 | Isolated module behavior and cross-module interaction |
 
 ## How to Run Tests
 
@@ -78,33 +101,53 @@ pytest -n auto
 
 ## Property-Based Testing with Hypothesis
 
-Forge uses [Hypothesis](https://hypothesis.readthedocs.io/) to verify 12 correctness properties across core components. Property-based tests generate thousands of random inputs and verify that invariants always hold.
+Forge uses [Hypothesis](https://hypothesis.readthedocs.io/) to verify correctness properties across core components. Property-based tests generate thousands of random inputs and verify that invariants always hold. There are 55 property-based tests total, spread across 11 `test_*_properties.py` files. Each file's docstring and test class names a numbered property (numbers are assigned per-topic and are not globally unique — e.g. two different files both use "Property 5" and "Property 8, 9" for unrelated invariants):
 
-### The 12 Correctness Properties
+#### `test_router_properties.py` — Model Router
 
-#### Event Bus Properties
+- **Property 1: Routing soundness** — `route()` returns the completion from the first provider that is present in the registry, breaker-closed, and succeeds; never returns from an unavailable or breaker-open provider
+- **Property 7: Router fallback monotonicity** — `route()` tries providers strictly in chain order, never retries after a `PermanentError`, and raises `ModelUnavailableError` only after exhausting the chain
 
-1. **Delivery guarantee** — Every published event is delivered to all matching subscribers exactly once
-2. **Ordering guarantee** — Events are delivered in publication order within a session
-3. **Wildcard correctness** — A `*` subscriber receives every event regardless of topic
-4. **Unsubscribe isolation** — After unsubscribe, no further events are delivered to that handler
+#### `test_discovery_properties.py` — Discovery
 
-#### Registry Properties
+- **Property 2: Discovery soundness** — for every capability in the registry after bootstrap, its last `health_check` returned `ok=true`; no unhealthy capability is ever registered
 
-5. **Register/deregister symmetry** — Registering then deregistering returns the registry to its prior state
-6. **Kind-based lookup correctness** — `get_by_kind(K)` returns exactly the entries with `kind == K`
-7. **Uniqueness invariant** — No two entries can share the same `name`
+#### `test_verification_properties.py` — Verification Pipeline
 
-#### Budget Properties
+- **Property 3: Verification merge order-independence** — for all sets of advisory verifier results, the merged `dict[stage_name -> result]` is independent of wall-clock arrival order
 
-8. **Monotonic consumption** — Remaining budget never increases (only decreases or stays)
-9. **Boundary correctness** — `check(n)` returns False iff consuming `n` would exceed the limit
-10. **Zero-budget safety** — A budget with limit=0 rejects all consumption
+#### `test_event_properties.py` — Event Bus
 
-#### Router Properties
+- **Property 4: Event ordering** — for all events sharing a `correlation_id`, `seq` values are unique and strictly increasing
+- **Property 5: Causality closure** — for every non-root event, `causation_id` references an event with a smaller `seq` in the same session
 
-11. **Fallback chain exhaustion** — If all providers fail, the router raises (never silently drops)
-12. **Provider selection determinism** — Given the same registry state and chain config, the same provider is always selected first
+#### `test_planner_properties.py` — Planner
+
+- **Property 5: Plan acyclicity** — for all task sets, `plan` produces a DAG or reports a cycle; every `depends_on` references an existing task id
+
+#### `test_audit_properties.py` — Audit Trail
+
+- **Property 6: Audit replay fidelity** — replaying `audit_log` ordered by `seq` reconstructs a faithful projection: persisted events are field-for-field equal to the originals, in the same order, with no events lost or duplicated
+
+#### `test_inspector_properties.py` — Runtime Inspector
+
+- **Property 8: Explainability without inference** — every explain and runtime status response is derived solely from structured state (audit trail, registry, `ForgeState`); no LLM is invoked
+
+#### `test_budget_properties.py` — Session Budget
+
+- **Property 8: Budget safety** — no model call is issued when `session.budget.remaining < estimated_tokens`
+
+#### `test_secret_properties.py` — Secret Holder
+
+- **Property 9: Secret non-leakage** — for all persisted artifacts (state snapshots, audit records, event payloads), no raw VCS token or provider key appears after calling `redact_or_raise()`
+
+#### `test_workspace_properties.py` — Workspace Manager
+
+- **Property 9: Workspace isolation** — no worker writes to the canonical repository; all task work happens in an isolated workspace and reaches the canonical repo only via commit/merge
+
+#### `test_property_doc_drift.py` — Documentation Maintenance
+
+- **Property 10: Documentation non-drift** — after finalize, for every module changed in the twin diff, either docs were updated or a `DocDrift` entry is recorded
 
 ### Example Property Test
 

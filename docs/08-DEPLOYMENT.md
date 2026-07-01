@@ -75,6 +75,8 @@ PostgreSQL has a health check that the API service depends on:
 
 The API service only starts after PostgreSQL reports healthy.
 
+> **Note:** `docker-compose.yml` only defines the `postgres` and `forge-api` services — there is no frontend container. Running `docker-compose up -d` does **not** start the frontend. Run it separately with `cd frontend && npm install && npm run dev` (or build/deploy it via its own Dockerfile), and point it at the API using `NEXT_PUBLIC_WS_URL`.
+
 ## Quick Start
 
 ```bash
@@ -109,9 +111,10 @@ curl http://localhost:8000/health
 | `FORGE_AUTH_DISABLED` | No | `false` | Disable auth (development only) |
 | `FORGE_ENV` | No | `production` | Environment name |
 | `FORGE_LOG_LEVEL` | No | `INFO` | Logging level |
-| `FORGE_CONFIG_DIR` | No | `./config` | Path to YAML config directory |
+| `FORGE_CONFIG_PATH` | No | `/data/forge-config.json` | Path to the persisted runtime config JSON file used by `ConfigService` (read in `backend/app/workflow/bootstrap.py`) |
 | `FORGE_USE_SANDBOX` | No | `auto` | Sandbox mode: `auto`, `always`, or `never` |
-| `NEXT_PUBLIC_WS_URL` | No | `ws://localhost:8000` | WebSocket URL for frontend event stream |
+| `FORGE_TOKEN_LIMIT` | No | — | Overrides the default per-session token budget (see `backend/app/workflow/deps.py`) |
+| `NEXT_PUBLIC_WS_URL` | No | `ws://localhost:8000` | WebSocket URL for frontend event stream. Only relevant when running the frontend separately — `docker-compose` does not build or wire up a frontend container |
 | `SESSION_MAX_TOKENS` | No | `1000000` | Max tokens per session budget |
 | `HEALTH_MONITOR_INTERVAL_S` | No | `30` | Health check interval in seconds |
 
@@ -133,6 +136,9 @@ AIDER_MODEL=claude-sonnet-4-20250514
 
 # Sandbox (auto=use Docker if available, always=require Docker, never=no sandbox)
 FORGE_USE_SANDBOX=auto
+
+# AI Model for workflow (override with any OpenRouter model ID)
+FORGE_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free
 
 # Authentication
 FORGE_API_TOKEN=your-secret-api-token

@@ -6,6 +6,8 @@ Every file in the Forge repository (excluding `.venv/`, `__pycache__/`, `.pytest
 forge/
 ├── .env.docker                                    # Docker environment template
 ├── .gitignore                                     # Git ignore rules
+├── .vscode/                                       # Editor settings
+│   └── settings.json
 ├── README.md                                      # Project README
 ├── docker-compose.yml                             # PostgreSQL + Forge API services
 │
@@ -88,7 +90,9 @@ forge/
 │   │   │   ├── __init__.py                        # Exports all adapters
 │   │   │   ├── openrouter.py                      # OpenRouter AI provider
 │   │   │   ├── github_vcs.py                      # GitHub VCS (git subprocess)
-│   │   │   └── aider_tool.py                      # Aider coding tool (subprocess)
+│   │   │   ├── aider_tool.py                      # Aider coding tool (subprocess)
+│   │   │   ├── sandboxed_aider.py                 # Aider in an isolated Docker container
+│   │   │   └── openhands.py                       # OpenHands Cloud coding tool
 │   │   │
 │   │   ├── workflow/                              # Layer 3: LangGraph Workflow
 │   │   │   ├── __init__.py
@@ -225,7 +229,7 @@ forge/
 │   │   ├── ARCHITECTURE.md
 │   │   └── DEVELOPMENT.md
 │   │
-│   └── tests/                                     # 1,343+ tests
+│   └── tests/                                     # 1,352+ tests
 │       ├── __init__.py
 │       ├── test_adapters.py                       # Adapter unit tests (25)
 │       ├── test_api.py                            # API endpoint tests (34)
@@ -291,8 +295,13 @@ forge/
     │   ├── design.md
     │   ├── requirements.md
     │   └── tasks.md
-    └── forge-infra/                               # Infrastructure spec (19 tasks, complete)
+    ├── forge-infra/                               # Infrastructure spec (19 tasks, complete)
+    │   ├── .config.kiro
+    │   └── tasks.md
+    └── forge-setup-and-errors/                    # Setup & error handling spec
         ├── .config.kiro
+        ├── design.md
+        ├── requirements.md
         └── tasks.md
 ```
 
@@ -302,13 +311,13 @@ forge/
 |-----------|-------|-------------|
 | `frontend/` | 14 | Next.js app, components, config |
 | `backend/app/api/` | 2 | REST endpoints + auth |
-| `backend/app/adapters/` | 5 | OpenRouter, GitHub, Aider, Sandboxed Aider |
+| `backend/app/adapters/` | 6 | OpenRouter, GitHub, Aider, Sandboxed Aider, OpenHands, `__init__.py` |
 | `backend/app/workflow/` | 7 + 13 nodes = 20 | State machine + node functions |
 | `backend/app/runtime/` | 27 | Core business logic (27 modules) |
 | `backend/app/db/` | 6 | PostgreSQL stores |
 | `backend/alembic/` | 4 | Database migrations |
 | `backend/config/` | 6 | YAML configuration |
-| `backend/tests/` | 48 | Unit + property-based + integration tests |
+| `backend/tests/` | 53 | Unit + property-based + integration tests |
 | `docs/` | 13 | Documentation suite |
 | Root | 4 | README, docker-compose, .gitignore, .env.docker |
 | **Total (project files)** | **~165** | Excluding .venv, .kiro specs |

@@ -19,6 +19,7 @@
 | GitHub VCS adapter (clone/commit/push + token sanitization) | ✅ Implemented |
 | Aider tool adapter (subprocess + timeout) | ✅ Implemented |
 | **Sandboxed Aider tool (Docker container per task)** | ✅ Implemented |
+| **OpenHands adapter (Cloud coding agent, highest-priority coding tool)** | ✅ Implemented |
 | **Pre-commit scope check (blocks sensitive path modifications)** | ✅ Implemented |
 | **Workspace hard ceiling (prevents resource exhaustion)** | ✅ Implemented |
 | **Diff audit logging (captures all AI-generated changes)** | ✅ Implemented |
@@ -26,7 +27,7 @@
 | PostgreSQL schema + stores + migrations | ✅ Ready to use |
 | Docker Compose deployment | ✅ Working |
 | Next.js frontend with real-time events | ✅ Working |
-| 1,343+ tests (unit + property-based + integration) | ✅ All passing |
+| 1,352+ tests (unit + property-based + integration) | ✅ All passing |
 | API authentication (Bearer token) | ✅ Working |
 | WebSocket event streaming | ✅ Working |
 | Boundary enforcement (architectural drift prevention) | ✅ Working |
@@ -48,7 +49,7 @@ The `assemble_deps()` function in `bootstrap.py` creates in-memory implementatio
 
 Without `OPENROUTER_API_KEY`, the system starts in DEGRADED mode. The `clarify`, `architect`, and `plan` nodes use a no-op call adapter that returns `{"result": "no-op"}`.
 
-**Impact:** End-to-end builds require real API keys. The runtime logic is fully exercisable without them (via tests), but you can't see a real build complete.
+**Impact:** End-to-end builds require real API keys for the workflow's own architect/planner/clarify AI calls. The one exception is the coding/execution step itself: if `OPENHANDS_API_KEY` is set, `_create_coding_tool()` selects OpenHands Cloud, which supplies its own internal coding model and doesn't strictly require `OPENROUTER_API_KEY` to execute a task. `OPENROUTER_API_KEY` is still required for the clarify/architect/plan nodes regardless of which coding tool is selected. Otherwise, the runtime logic is fully exercisable without keys (via tests), but you can't see a real build complete.
 
 ### 3. Sequential Task Execution
 
@@ -100,7 +101,6 @@ Workspaces are created per-task with a hard ceiling (default 10 concurrent) and 
 | Real-time streaming to frontend | Stream AI token output to the chat UI as it arrives |
 | Multi-model evaluation | Try multiple models for architect/plan and pick the best result |
 | Retry budgets per provider | Track failures per provider per session, not just globally |
-| OpenHands adapter | Add [OpenHands](https://github.com/All-Hands-AI/OpenHands) as an alternative coding tool |
 
 ### Long-Term (3–6 Months)
 
@@ -117,7 +117,7 @@ Workspaces are created per-task with a hard ceiling (default 10 concurrent) and 
 
 ### 1. Testability
 
-Every module depends on protocols, not implementations. The entire runtime is testable without any external services, yielding 1,343+ fast tests.
+Every module depends on protocols, not implementations. The entire runtime is testable without any external services, yielding 1,352+ fast tests.
 
 ### 2. Observability
 

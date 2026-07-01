@@ -128,7 +128,7 @@ forge/
 ├── backend/
 │   ├── app/
 │   │   ├── api/               # REST + WebSocket endpoints + auth
-│   │   ├── adapters/          # OpenRouter, GitHub VCS, Aider, Sandboxed Aider
+│   │   ├── adapters/          # OpenRouter, GitHub VCS, Aider, Sandboxed Aider, OpenHands
 │   │   ├── workflow/          # LangGraph state machine (13 nodes)
 │   │   ├── runtime/           # Core logic (27 runtime modules)
 │   │   │   ├── verification/  # scope_check.py (pre-commit security)
@@ -216,10 +216,13 @@ Auth: `Authorization: Bearer <FORGE_API_TOKEN>` on all endpoints.
 | `DATABASE_URL` | For Docker | PostgreSQL connection string |
 | `FORGE_API_TOKEN` | Yes | Bearer token for API auth |
 | `FORGE_AUTH_DISABLED` | No | Set `true` to disable auth (development only) |
-| `AIDER_MODEL` | No | Model for Aider subprocess (default: openrouter/nvidia/nemotron-3-ultra-550b-a55b:free) |
+| `AIDER_MODEL` | No | Model for Aider subprocess. Direct `AiderTool` defaults to `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`; `SandboxedAiderTool` (the default/recommended adapter) defaults to `claude-sonnet-4-20250514` instead — the two tools have different hardcoded defaults |
 | `FORGE_MODEL` | No | AI model for workflow (default: nvidia/nemotron-3-ultra-550b-a55b:free) |
 | `FORGE_USE_SANDBOX` | No | Sandbox mode: `auto` (default), `always`, `never` |
 | `OPENHANDS_API_KEY` | No | OpenHands Cloud API key (if set, uses OpenHands instead of Aider) |
+| `DATABASE_POOL_SIZE` | No | Maximum PostgreSQL connection pool size (default: 10) |
+| `FORGE_TOKEN_LIMIT` | No | Overrides the default session token budget |
+| `FORGE_CONFIG_PATH` | No | Path to the persisted runtime config JSON used by ConfigService (default: `/data/forge-config.json`) |
 | `NEXT_PUBLIC_WS_URL` | No | WebSocket backend URL for frontend (default: `ws://localhost:8000`) |
 
 ## Testing
