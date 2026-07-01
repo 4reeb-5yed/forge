@@ -345,12 +345,12 @@ class _InMemoryCheckpointStore:
         self._checkpoints: dict[str, Any] = {}
 
     async def write_checkpoint(
-        self, session_id: str, node_id: str, highest_seq: int, redacted_state: dict
+        self, session_id: str, node_id: str, highest_seq: int, state_json: dict | None = None
     ) -> None:
         self._checkpoints[session_id] = {
             "node_id": node_id,
             "highest_seq": highest_seq,
-            "state": redacted_state,
+            "state": state_json,
         }
 
     async def get_latest_checkpoint(self, session_id: str):
