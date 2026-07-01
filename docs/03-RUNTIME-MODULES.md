@@ -61,6 +61,27 @@ class EventBus:
 
 **Dependencies:** None (leaf component).
 
+**Event Types:** The `EventType` enum includes all production event types:
+
+| Category | Events |
+|----------|--------|
+| **Model** | `MODEL_SELECTED`, `MODEL_FALLBACK` |
+| **Capability** | `CAPABILITY_REGISTERED`, `CAPABILITY_DEREGISTERED`, `CAPABILITY_DEGRADED`, `CAPABILITY_RECOVERED` |
+| **Workspace** | `WORKSPACE_CREATED`, `WORKSPACE_DESTROYED` |
+| **Verification** | `VERIFY_STAGE`, `VERIFY_PASSED` |
+| **Policy** | `POLICY_DECISION` |
+| **Task** | `TASK_START`, `TASK_DONE`, `TASK_FAIL` |
+| **Build** | `BUILD_DONE`, `SPEC_READY`, `TASKS_READY`, `COMMIT_DONE`, `COMMIT_FAILED` |
+| **Approval** | `APPROVAL_REQUESTED`, `APPROVAL_APPROVED`, `APPROVAL_REJECTED`, `APPROVAL_EXPIRED`, `APPROVAL_CANCELLED` |
+| **Scheduler** | `SCHEDULER_STARTED`, `SCHEDULER_STOPPED`, `SCHEDULER_PAUSED`, `SCHEDULER_RESUMED`, `SCHEDULER_SESSION_QUEUED`, `SCHEDULER_SESSION_STARTED`, `SCHEDULER_SESSION_COMPLETED`, `SCHEDULER_SESSION_FAILED`, `SCHEDULER_SESSION_CANCELLED` |
+| **Learning** | `LEARNING_ANALYSIS_COMPLETE`, `LEARNING_RECOMMENDATION_GENERATED` |
+| **Timeout** | `BUILD_TIMEOUT_STARTED`, `BUILD_TIMEOUT_EXCEEDED` |
+| **Interrupt** | `INTERRUPT_PAUSED`, `INTERRUPT_RESUMED`, `INTERRUPT_STOPPED`, `INTERRUPT_REDIRECTED` |
+| **Error** | `CONFIG_ERROR`, `RUNTIME_ERROR`, `WORKFLOW_ERROR`, `ERROR`, `BUDGET_EXCEEDED` |
+| **Streaming** | `TOKEN`, `QUESTION` |
+| **Forge** | `FORGE_BOOT_DISCOVERY_COMPLETE`, `FORGE_READY` |
+| **Documentation** | `DOC_UPDATED`, `DOC_DRIFT` |
+
 ---
 
 ## Registry & Discovery
@@ -867,7 +888,9 @@ class ApprovalManager:
 
 **Dependencies:** EventBus (emits approval events)
 
-**Events emitted:** `APPROVAL_REQUESTED`, `APPROVAL_APPROVED`, `APPROVAL_REJECTED`, `APPROVAL_EXPIRED`
+**Events emitted:** `APPROVAL_REQUESTED`, `APPROVAL_APPROVED`, `APPROVAL_REJECTED`, `APPROVAL_EXPIRED`, `APPROVAL_CANCELLED`
+
+**Notes:** The ApprovalManager can be updated with an event emitter after initialization via `update_event_emitter()`. Event emission is optional and degrades gracefully.
 
 ---
 
@@ -892,10 +915,14 @@ class SessionScheduler:
     def get_running_sessions() -> list[str]
 ```
 
-**Dependencies:** asyncio
+**Dependencies:** asyncio, EventBus (optional, for event emission)
 
 **Environment Variables:**
 - `FORGE_MAX_CONCURRENT` — Maximum concurrent sessions (default: 3)
+
+**Events emitted:** `SCHEDULER_STARTED`, `SCHEDULER_STOPPED`, `SCHEDULER_PAUSED`, `SCHEDULER_RESUMED`, `SCHEDULER_SESSION_QUEUED`, `SCHEDULER_SESSION_STARTED`, `SCHEDULER_SESSION_COMPLETED`, `SCHEDULER_SESSION_FAILED`, `SCHEDULER_SESSION_CANCELLED`
+
+**Notes:** The scheduler automatically emits lifecycle events to the event bus when `update_event_emitter()` is called. Event emission is optional and degrades gracefully when no emitter is configured.
 
 ---
 
@@ -949,6 +976,8 @@ class LearningEngine:
 
 **Environment Variables:**
 - `FORGE_LEARNING_WINDOW_DAYS` — Analysis window (default: 7)
+
+**Events emitted:** `LEARNING_ANALYSIS_COMPLETE`, `LEARNING_RECOMMENDATION_GENERATED`
 
 ---
 
