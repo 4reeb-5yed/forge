@@ -2,11 +2,12 @@
 
 Runs at application startup:
 1. Load and validate configuration
-2. Run concurrent discovery (probe all resources)
-3. Register healthy capabilities in the registry
-4. Start health monitor background task
-5. Evaluate operational mode
-6. Emit forge.ready event
+2. Initialize PostgreSQL persistence (if DATABASE_URL available)
+3. Run concurrent discovery (probe all resources)
+4. Register healthy capabilities in the registry
+5. Start health monitor background task
+6. Evaluate operational mode
+7. Emit forge.ready event
 
 Requirements: 15.1, 15.2, 15.3, 15.4, 16.1
 """
@@ -14,6 +15,7 @@ Requirements: 15.1, 15.2, 15.3, 15.4, 16.1
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -140,8 +142,9 @@ async def bootstrap(deps: RuntimeDeps) -> None:
 def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
     """Instantiate all runtime components and wire them into RuntimeDeps.
 
-    Uses in-memory stores (no external databases required). Returns a fully
-    assembled dependency container ready for bootstrap and graph construction.
+    Uses PostgreSQL stores when DATABASE_URL is available, falls back to in-memory
+    stores for development. Returns a fully assembled dependency container ready
+    for bootstrap and graph construction.
 
     Security notes:
     - GITHUB_TOKEN is NOT passed to AiderTool or workspace environment.
@@ -155,7 +158,6 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
     Returns:
         A fully wired RuntimeDeps instance.
     """
-    import os
     from app.runtime.audit import AuditTrail
     from app.runtime.config import ConfigService
     from app.runtime.events.bus import EventBus
@@ -182,32 +184,26 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
     session_manager = SessionManager(secret_holder=secret_holder)
     audit_trail = AuditTrail()
 
-    # In-memory checkpoint store for CrashRecovery
-    class _InMemoryCheckpointStore:
-        """Minimal in-memory checkpoint store for development."""
+    # Check if PostgreSQL persistence is available
+    persistence = _init_persistence()
+    use_db = persistence is not None
 
-        def __init__(self) -> None:
-            self._checkpoints: dict[str, Any] = {}
+    if use_db:
+        logger.info("Using PostgreSQL persistence stores")
+    else:
+        logger.info("Using in-memory stores (set DATABASE_URL for persistence)")
 
-        async def write_checkpoint(
-            self, session_id: str, node_id: str, highest_seq: int, redacted_state: dict
-        ) -> None:
-            self._checkpoints[session_id] = {
-                "node_id": node_id,
-                "highest_seq": highest_seq,
-                "state": redacted_state,
-            }
-
-        async def get_latest_checkpoint(self, session_id: str):
-            return self._checkpoints.get(session_id)
-
-        async def list_non_terminal_sessions(self) -> list:
-            return []
-
-    recovery = CrashRecovery(
-        checkpoint_store=_InMemoryCheckpointStore(),
-        event_bus=event_bus,
-    )
+    # Checkpoint store - use PostgreSQL or in-memory
+    if use_db:
+        recovery = CrashRecovery(
+            checkpoint_store=persistence,
+            event_bus=event_bus,
+        )
+    else:
+        recovery = CrashRecovery(
+            checkpoint_store=_InMemoryCheckpointStore(),
+            event_bus=event_bus,
+        )
 
     # Subscribe audit trail to all events
     event_bus.subscribe("*", audit_trail.handle_event, subscriber_id="audit_trail")
@@ -321,13 +317,57 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
     )
 
 
+def _init_persistence():
+    """Initialize PostgreSQL persistence if pool was created in lifespan.
+
+    The pool is created in app.py's lifespan startup and stored in the
+    persistence module's _pool variable. This function retrieves it.
+
+    Returns:
+        CheckpointStore implementation if pool available, None otherwise.
+    """
+    try:
+        from app.runtime import persistence as persist_module
+        if persist_module._pool is not None:
+            from app.runtime.persistence import PostgresCheckpointStore
+            logger.info("Using PostgreSQL checkpoint store")
+            return PostgresCheckpointStore(persist_module._pool)
+    except Exception as exc:
+        logger.warning("Failed to get PostgreSQL pool: %s — using in-memory stores", exc)
+
+    return None
+
+
+class _InMemoryCheckpointStore:
+    """Minimal in-memory checkpoint store for development."""
+
+    def __init__(self) -> None:
+        self._checkpoints: dict[str, Any] = {}
+
+    async def write_checkpoint(
+        self, session_id: str, node_id: str, highest_seq: int, redacted_state: dict
+    ) -> None:
+        self._checkpoints[session_id] = {
+            "node_id": node_id,
+            "highest_seq": highest_seq,
+            "state": redacted_state,
+        }
+
+    async def get_latest_checkpoint(self, session_id: str):
+        return self._checkpoints.get(session_id)
+
+    async def list_non_terminal_sessions(self) -> list:
+        return []
+
+
 def _create_coding_tool():
     """Create the appropriate coding tool based on Docker availability.
 
     Prefers SandboxedAiderTool (Docker container per task) when Docker
     is available. Falls back to direct AiderTool if Docker is not found.
 
-    IMPORTANT: In 'auto' mode, falling back to unsandboxed execution logs
+    IMPORTANT: Default is 'always' in production for maximum security.
+    In 'auto' mode, falling back to unsandboxed execution logs
     a WARNING (not info) so operators notice the security gap. In 'always'
     mode, missing Docker is a hard failure that prevents startup.
 
@@ -337,7 +377,7 @@ def _create_coding_tool():
     import os
     import shutil
 
-    use_sandbox = os.environ.get("FORGE_USE_SANDBOX", "auto")
+    use_sandbox = os.environ.get("FORGE_USE_SANDBOX", "always")
 
     if use_sandbox == "never":
         from app.adapters.aider_tool import AiderTool
