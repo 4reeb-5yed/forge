@@ -285,7 +285,7 @@ class TestApprovalGate:
 
         await workflow.commit_task(request)
 
-        pending_events = event_collector.get_events_by_type(EventType.APPROVAL_PENDING)
+        pending_events = event_collector.get_events_by_type(EventType.APPROVAL_REQUESTED)
         assert len(pending_events) == 1
         payload = pending_events[0].payload
         assert payload["task_id"] == "task-1"
@@ -565,7 +565,7 @@ class TestNonGatedCommit:
         result = await commit_workflow.commit_task(request)
 
         assert result.success is True
-        pending_events = event_collector.get_events_by_type(EventType.APPROVAL_PENDING)
+        pending_events = event_collector.get_events_by_type(EventType.APPROVAL_REQUESTED)
         assert len(pending_events) == 0
 
     @pytest.mark.asyncio
