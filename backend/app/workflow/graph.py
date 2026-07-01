@@ -78,8 +78,8 @@ def build_forge_graph(
         try:
             from app.workflow.checkpoint_middleware import create_checkpoint_middleware
             # Use the recovery checkpoint store if available
-            if deps.recovery and hasattr(deps.recovery, '_checkpoint_store'):
-                checkpoint_middleware = create_checkpoint_middleware(deps.recovery._checkpoint_store)
+            if deps.recovery and hasattr(deps.recovery, '_store'):
+                checkpoint_middleware = create_checkpoint_middleware(deps.recovery._store)
             else:
                 checkpoint_middleware = create_checkpoint_middleware(None)
         except ImportError:
