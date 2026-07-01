@@ -177,7 +177,7 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
         logger.warning("No OPENROUTER_API_KEY — using no-op call adapter (AI calls disabled)")
 
     # Configure role chains — all roles use OpenRouter with Claude Sonnet 4
-    default_model = os.environ.get("FORGE_MODEL", "anthropic/claude-sonnet-4-20250514")
+    default_model = os.environ.get("FORGE_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
     chain_config = RoleChainConfig(chains={
         Role.CLARIFICATION: [ChainEntry(provider="openrouter", model=default_model)],
         Role.ARCHITECT: [ChainEntry(provider="openrouter", model=default_model)],
