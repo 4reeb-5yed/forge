@@ -1,6 +1,6 @@
 # Database — PostgreSQL Persistence
 
-Forge uses PostgreSQL 16 for durable persistence of sessions, audit logs, checkpoints, and learning outcomes. The database layer lives in `backend/app/db/`.
+Forge uses PostgreSQL 16 for durable persistence of sessions, audit logs, checkpoints, and learning outcomes. The database layer lives in `backend/app/db/` for raw SQL operations and `backend/app/runtime/persistence.py` for store classes.
 
 ## Schema Overview
 
