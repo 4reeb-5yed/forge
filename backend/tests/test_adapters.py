@@ -1,6 +1,7 @@
 """Tests for Forge adapters: OpenRouter, GitHub VCS, and Aider Tool."""
 
 from __future__ import annotations
+import os
 
 import asyncio
 import json
@@ -12,8 +13,7 @@ import pytest
 from app.adapters.openrouter import OpenRouterProvider
 from app.adapters.github_vcs import GitHubVCS
 from app.adapters.aider_tool import AiderTool
-from app.runtime.router import PermanentError
-from app.runtime.types import Health
+from app.shared import PermanentError, Health
 
 
 # ===========================================================================
@@ -369,10 +369,17 @@ class TestGitHubVCSHealthCheck:
 
     async def test_health_check_no_token(self):
         """Missing token returns unhealthy."""
-        vcs = GitHubVCS(token="")
-        health = await vcs.health_check()
-        assert health.ok is False
-        assert "GITHUB_TOKEN" in health.message
+        original_env = os.environ.get("GITHUB_TOKEN")
+        try:
+            if "GITHUB_TOKEN" in os.environ:
+                del os.environ["GITHUB_TOKEN"]
+            vcs = GitHubVCS()
+            health = await vcs.health_check()
+            assert health.ok is False
+            assert "GITHUB_TOKEN" in health.message
+        finally:
+            if original_env is not None:
+                os.environ["GITHUB_TOKEN"] = original_env
 
     async def test_health_check_healthy(self):
         """With token and working git, returns healthy."""

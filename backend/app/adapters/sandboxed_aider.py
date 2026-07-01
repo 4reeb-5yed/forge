@@ -20,7 +20,7 @@ import logging
 import os
 from typing import Any
 
-from app.runtime.types import Health, ToolResult
+from app.shared import Health, ToolResult
 
 logger = logging.getLogger(__name__)
 

@@ -32,15 +32,18 @@ class Layer(str, Enum):
     APPLICATION = "application"
     RUNTIME = "runtime"
     ADAPTER = "adapter"
+    SHARED = "shared"  # Shared types used by multiple layers
 
 
 # Layer adjacency: which layers can a given layer import from?
 # Each layer may import from itself and from exactly one adjacent layer.
+# Adapters and Runtime can both import from the shared layer.
 LAYER_ADJACENCY: dict[Layer, set[Layer]] = {
     Layer.PRESENTATION: {Layer.PRESENTATION, Layer.APPLICATION},
     Layer.APPLICATION: {Layer.APPLICATION, Layer.RUNTIME},
-    Layer.RUNTIME: {Layer.RUNTIME, Layer.ADAPTER},
-    Layer.ADAPTER: {Layer.ADAPTER},
+    Layer.RUNTIME: {Layer.RUNTIME, Layer.ADAPTER, Layer.SHARED},
+    Layer.ADAPTER: {Layer.ADAPTER, Layer.SHARED},
+    Layer.SHARED: {Layer.SHARED},
 }
 
 # Module path prefixes that identify each layer
@@ -49,6 +52,7 @@ LAYER_PREFIXES: dict[str, Layer] = {
     "app.runtime": Layer.RUNTIME,
     "app.adapters": Layer.ADAPTER,
     "app.presentation": Layer.PRESENTATION,
+    "app.shared": Layer.SHARED,
 }
 
 # Forbidden content patterns per layer (Req 23.2-23.5)

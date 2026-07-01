@@ -69,8 +69,9 @@ graph TB
 | **Location** | `backend/app/adapters/` |
 | **Technology** | httpx, asyncio subprocess |
 | **Responsibility** | Translate one protocol call into one infrastructure call |
-| **Boundary rule** | Contains zero business logic. No back-imports to runtime |
+| **Boundary rule** | Contains zero business logic. No back-imports to runtime (except via shared types) |
 | **Communicates with** | Infrastructure (HTTP APIs, CLIs, databases) |
+| **Shared types** | Imports `Health`, `ToolResult`, `PermanentError` from `app/shared/` |
 
 ### Layer 6: Infrastructure
 
@@ -90,11 +91,29 @@ graph TB
 ❌ Runtime cannot import from API (no transport awareness)
 ```
 
-The boundary checker (`app/runtime/boundaries/`) enforces these rules at test time:
+### Shared Layer (`app/shared/`)
+
+The `app/shared/` module is the **canonical source** for core types shared across layers:
+- `Health` / `HealthStatus` — Health check result type
+- `ToolResult` — Coding tool execution result
+- `PermanentError` — Non-retryable provider errors
+
+Both Adapters and Runtime import from this module. This avoids circular dependencies while maintaining clean boundaries.
+
+```
+✅ Adapter can import from Shared (Health, ToolResult)
+✅ Runtime can import from Shared (Health, ToolResult)
+✅ Runtime types in app/runtime/types.py re-export from Shared for backward compatibility
+❌ Shared cannot import from Adapter or Runtime (no back-imports)
+```
+
+**Design note:** `app/runtime/types.py` re-exports shared types for backward compatibility, but the canonical source is `app/shared/`.
+
+The boundary checker (`app/boundaries.py`) enforces these rules at test time:
 
 ```python
-from app.runtime.boundaries import enforce_boundaries
-enforce_boundaries()  # Raises BoundaryCheckError on violations
+from app.boundaries import check_all_boundaries
+violations = check_all_boundaries(app_root)  # Returns list of BoundaryViolation
 ```
 
 ## The Event Bus — Architectural Spine

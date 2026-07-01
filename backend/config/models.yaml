@@ -1,63 +1,55 @@
 # AI Provider and Model Configuration
 # Maps roles to ordered provider chains for the Model Router.
+#
+# NOTE: Only 'openrouter' is currently implemented as an adapter.
+# Until OpenAI/Anthropic adapters exist and are registered in the capability
+# registry, only openrouter entries will resolve successfully.
 
 roles:
   clarification:
     chain:
-      - provider: openai
-        model: gpt-4o
-      - provider: anthropic
-        model: claude-sonnet-4-20250514
+      - provider: openrouter
+        model: nvidia/nemotron-3-ultra-550b-a55b:free
 
   architect:
     chain:
-      - provider: anthropic
-        model: claude-sonnet-4-20250514
-      - provider: openai
-        model: gpt-4o
+      - provider: openrouter
+        model: nvidia/nemotron-3-ultra-550b-a55b:free
 
   planner:
     chain:
-      - provider: anthropic
-        model: claude-sonnet-4-20250514
-      - provider: openai
-        model: gpt-4o
+      - provider: openrouter
+        model: nvidia/nemotron-3-ultra-550b-a55b:free
 
   coder:
     chain:
-      - provider: anthropic
-        model: claude-sonnet-4-20250514
-      - provider: openai
-        model: gpt-4o
+      - provider: openrouter
+        model: nvidia/nemotron-3-ultra-550b-a55b:free
 
   reviewer:
     chain:
-      - provider: anthropic
-        model: claude-sonnet-4-20250514
-      - provider: openai
-        model: gpt-4o
+      - provider: openrouter
+        model: nvidia/nemotron-3-ultra-550b-a55b:free
 
   doc_writer:
     chain:
-      - provider: openai
-        model: gpt-4o
-      - provider: anthropic
-        model: claude-sonnet-4-20250514
+      - provider: openrouter
+        model: nvidia/nemotron-3-ultra-550b-a55b:free
 
   interrupt_handler:
     chain:
-      - provider: openai
-        model: gpt-4o-mini
-      - provider: anthropic
-        model: claude-sonnet-4-20250514
+      - provider: openrouter
+        model: nvidia/nemotron-3-ultra-550b-a55b:free
 
-providers:
-  openai:
-    base_url: "${OPENAI_API_BASE_URL}"
-    api_key_env: "OPENAI_API_KEY"
-    timeout_s: 60
-
-  anthropic:
-    base_url: "${ANTHROPIC_API_BASE_URL}"
-    api_key_env: "ANTHROPIC_API_KEY"
-    timeout_s: 60
+# Provider configurations (for future adapters)
+# Uncomment and configure when implementing additional providers
+# providers:
+#   openai:
+#     base_url: "${OPENAI_API_BASE_URL}"
+#     api_key_env: "OPENAI_API_KEY"
+#     timeout_s: 60
+#
+#   anthropic:
+#     base_url: "${ANTHROPIC_API_BASE_URL}"
+#     api_key_env: "ANTHROPIC_API_KEY"
+#     timeout_s: 60

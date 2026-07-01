@@ -1,6 +1,6 @@
 # Testing
 
-Forge has 1,240+ tests covering the runtime, workflow, and adapters. The test suite uses pytest with Hypothesis for property-based testing.
+Forge has 1,343+ tests covering the runtime, workflow, and adapters. The test suite uses pytest with Hypothesis for property-based testing.
 
 ## Test Organization
 

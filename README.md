@@ -12,7 +12,7 @@ Comprehensive documentation lives in [`docs/`](./docs/README.md):
 |-----|-------------|
 | [Overview](./docs/01-OVERVIEW.md) | What Forge is, current status, tech stack |
 | [Architecture](./docs/02-ARCHITECTURE.md) | 6-layer design, event bus, data flow |
-| [Runtime Modules](./docs/03-RUNTIME-MODULES.md) | All 27 modules with APIs and events |
+| [Runtime Modules](./docs/03-RUNTIME-MODULES.md) | All 27 runtime modules with APIs and events |
 | [Workflow](./docs/04-WORKFLOW.md) | LangGraph state machine, nodes, routing |
 | [Adapters](./docs/05-ADAPTERS.md) | OpenRouter, GitHub VCS, Aider, Sandboxed Aider |
 | [Database](./docs/06-DATABASE.md) | PostgreSQL schema, stores, migrations |
@@ -71,7 +71,7 @@ python -m venv .venv && source .venv/bin/activate  # or .venv\Scripts\activate o
 pip install -e ".[dev]"
 cp .env.example .env  # Edit with your keys
 
-# Run tests (1,310+ tests)
+# Run tests
 pytest
 
 # Start the server
@@ -108,7 +108,7 @@ curl -X POST http://localhost:8000/workflow/invoke \
 ├─────────────────────────────────────────────┤
 │  Workflow (LangGraph state machine)           │
 ├─────────────────────────────────────────────┤
-│  Runtime (asyncio core — 27 modules)         │
+│  Runtime (asyncio core — 27 runtime modules)  │
 ├─────────────────────────────────────────────┤
 │  Adapters (OpenRouter, GitHub, Aider)        │
 ├─────────────────────────────────────────────┤
@@ -129,7 +129,7 @@ forge/
 │   │   ├── api/               # REST + WebSocket endpoints + auth
 │   │   ├── adapters/          # OpenRouter, GitHub VCS, Aider, Sandboxed Aider
 │   │   ├── workflow/          # LangGraph state machine (13 nodes)
-│   │   ├── runtime/           # Core logic (27 modules, 1,310+ tests)
+│   │   ├── runtime/           # Core logic (27 runtime modules)
 │   │   │   ├── verification/  # scope_check.py (pre-commit security)
 │   │   │   └── workspace/     # Isolated workspaces with hard limits
 │   │   └── db/               # PostgreSQL stores (asyncpg)
@@ -223,7 +223,7 @@ Auth: `Authorization: Bearer <FORGE_API_TOKEN>` on all endpoints.
 
 ```bash
 cd backend
-pytest                    # Full suite (1,310+ tests)
+pytest                    # Full test suite
 pytest -x                 # Stop on first failure
 pytest tests/test_api.py  # Specific module
 pytest -k "properties"    # Property-based tests only
@@ -235,7 +235,7 @@ pytest -k "properties"    # Property-based tests only
 - **Circuit breaker per AI provider** — dead providers ejected in milliseconds
 - **Secrets never persisted in plaintext** — redacted at every serialization boundary, config file uses 0600 permissions
 - **Deterministic intent classification** — "stop" never depends on AI being reachable
-- **Workspace sandboxing** — each task runs in a Docker container with `--network none`, no host access, resource limits, and read-only rootfs. Only `OPENROUTER_API_KEY` reaches the sandbox.
+- **Workspace sandboxing** — each task runs in a Docker container with `--network none`, no host access, resource limits, and read-only rootfs. Only `OPENROUTER_API_KEY` and `HOME` reach the sandbox.
 - **Pre-commit scope check** — AI changes to CI pipelines, secrets, Docker configs, and env files are blocked before commit
 - **Diff audit trail** — every AI-generated change is captured as a git diff and recorded in the audit log
 - **Setup Wizard** — first-run configuration via `/setup` page; no `.env` editing required

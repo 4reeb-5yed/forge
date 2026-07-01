@@ -1,64 +1,25 @@
-"""Shared types used across the Forge Runtime plugin protocols and core components."""
+"""Shared types used across the Forge Runtime plugin protocols and core components.
+
+This module re-exports types from app.shared for backward compatibility.
+The canonical source for Health, ToolResult, and PermanentError is app.shared.
+"""
 
 from __future__ import annotations
 
+# Re-export shared types from app.shared
+# This maintains backward compatibility for code that imports from app.runtime.types
+from app.shared import (
+    Health,
+    HealthStatus,
+    ToolResult,
+)
+
+# Also re-export PermanentError for convenience
+from app.shared import PermanentError
+
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
-
-
-class HealthStatus(str, Enum):
-    """Status of a capability health check."""
-
-    OK = "ok"
-    DEGRADED = "degraded"
-    UNHEALTHY = "unhealthy"
-
-
-@dataclass(frozen=True)
-class Health:
-    """Result of a plugin health check.
-
-    Every protocol's health_check() returns this type, providing a uniform
-    way to assess capability readiness.
-    """
-
-    ok: bool
-    status: HealthStatus = HealthStatus.OK
-    latency_ms: float | None = None
-    message: str = ""
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-
-    @staticmethod
-    def healthy(latency_ms: float | None = None) -> Health:
-        return Health(ok=True, status=HealthStatus.OK, latency_ms=latency_ms)
-
-    @staticmethod
-    def unhealthy(message: str, latency_ms: float | None = None) -> Health:
-        return Health(
-            ok=False, status=HealthStatus.UNHEALTHY, latency_ms=latency_ms, message=message
-        )
-
-    @staticmethod
-    def degraded(message: str, latency_ms: float | None = None) -> Health:
-        return Health(
-            ok=False, status=HealthStatus.DEGRADED, latency_ms=latency_ms, message=message
-        )
-
-
-@dataclass(frozen=True)
-class ToolResult:
-    """Result of a CodingTool execution.
-
-    Captures whether the tool succeeded, any files it modified, and output/error details.
-    """
-
-    success: bool
-    files_modified: list[str] = field(default_factory=list)
-    output: str = ""
-    error: str = ""
-    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class VerifyStatus(str, Enum):

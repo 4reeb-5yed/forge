@@ -145,9 +145,13 @@ class TestDockerCommandConstruction:
             if arg == "-e" and i + 1 < len(cmd):
                 env_vars.append(cmd[i + 1])
 
-        # Only OPENROUTER_API_KEY should be passed
-        assert len(env_vars) == 1
-        assert env_vars[0].startswith("OPENROUTER_API_KEY=")
+        # Only OPENROUTER_API_KEY and HOME should be passed
+        # HOME is required for Aider's cache directory inside the sandbox
+        assert len(env_vars) == 2
+        env_dict = {v.split("=")[0] for v in env_vars}
+        assert env_dict == {"OPENROUTER_API_KEY", "HOME"}
+        assert any(v.startswith("OPENROUTER_API_KEY=") for v in env_vars)
+        assert any(v == "HOME=/home/sandbox" for v in env_vars)
 
     def test_command_does_not_pass_github_token(self, tool):
         """Security: GITHUB_TOKEN must never be passed to the sandbox."""

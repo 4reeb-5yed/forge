@@ -12,8 +12,7 @@ from typing import Any, AsyncIterator, Callable, Awaitable
 
 import httpx
 
-from app.runtime.router import PermanentError
-from app.runtime.types import Health
+from app.shared import Health, PermanentError
 
 logger = logging.getLogger(__name__)
 
