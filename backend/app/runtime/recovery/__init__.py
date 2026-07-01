@@ -9,6 +9,7 @@ Requirements: 21.1, 21.2, 21.3, 21.4, 21.5, 21.6
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Protocol
@@ -647,6 +648,8 @@ class CrashRecovery:
                     "recoverable": False,
                     "node_id": node_id,
                 },
+                correlation_id=session_id,
+                event_id=str(uuid.uuid4()),
             )
             await self._event_bus.publish(error_event)
         except Exception as exc:
@@ -683,6 +686,8 @@ class CrashRecovery:
                     "task_id": task_id,
                     "reason": "crash_recovery",
                 },
+                correlation_id=session_id,
+                event_id=f"recovery-ws-destroyed-{workspace_id}",
             )
             await self._event_bus.publish(event)
         except Exception as exc:

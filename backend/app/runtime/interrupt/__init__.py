@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
@@ -359,5 +360,7 @@ class InterruptHandler:
             session_id=session_id,
             source="interrupt_handler",
             payload=payload,
+            correlation_id=session_id,
+            event_id=str(uuid.uuid4()),
         )
         await self._event_emitter(event)

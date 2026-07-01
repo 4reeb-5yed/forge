@@ -9,6 +9,7 @@ Requirements: 25.1, 25.2, 25.3, 25.4, 25.5
 from __future__ import annotations
 
 import logging
+import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -313,6 +314,8 @@ class LearningRecorder:
                 "task_id": task_id,
                 "detail": error,
             },
+            correlation_id=session_id,
+            event_id=str(uuid.uuid4()),
         )
         try:
             await self._event_emitter.publish(event)

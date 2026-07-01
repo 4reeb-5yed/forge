@@ -32,10 +32,21 @@ class GitHubVCS:
         """Inject the GitHub token into a clone URL.
 
         Transforms https://github.com/owner/repo into
-        https://{token}@github.com/owner/repo
+        https://x-access-token:{token}@github.com/owner/repo
+
+        Note: the token must go in the *password* position, not the username
+        position. A username-only userinfo (``{token}@host``) leaves git
+        without a password, and git's http backend will then try to prompt
+        for one interactively — which fails with "could not read Password
+        ... No such device or address" in any non-interactive/non-TTY
+        environment (e.g. inside a Docker container). Supplying an explicit
+        username:password pair (``x-access-token`` is GitHub's documented
+        placeholder username for token auth) avoids the prompt entirely.
         """
         parsed = urlparse(url)
-        authed = parsed._replace(netloc=f"{self._token}@{parsed.hostname}")
+        authed = parsed._replace(
+            netloc=f"x-access-token:{self._token}@{parsed.hostname}"
+        )
         return urlunparse(authed)
 
     async def _run_git(
