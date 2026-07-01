@@ -221,5 +221,6 @@ def _setup_routes(app: Any) -> None:
                 detail=str(e)
             )
 
-    # Include router in app
-    app.include_router(approval_router)
+
+# Auto-register routes at module load time (decorators register them)
+_setup_routes(None)

@@ -69,8 +69,39 @@ async def _lifespan(app: FastAPI):
     set_approval_manager(approval_manager)
     logger.info("Approval manager initialized")
 
+    # Initialize and wire scheduler (lazy-loaded via singleton)
+    from app.runtime.scheduler import get_scheduler
+    _ = get_scheduler()  # Trigger lazy initialization
+    logger.info("Session scheduler initialized")
+
+    # Initialize and wire timeout manager (lazy-loaded via singleton)
+    from app.runtime.build_timeout import get_timeout_manager
+    _ = get_timeout_manager()  # Trigger lazy initialization
+    logger.info("Build timeout manager initialized")
+
+    # Initialize and wire learning engine (lazy-loaded via singleton)
+    from app.runtime.learning_engine import get_learning_engine
+    _ = get_learning_engine()  # Trigger lazy initialization
+    logger.info("Learning engine initialized")
+
+    # Initialize and wire stream router (lazy-loaded via singleton)
+    from app.runtime.stream_router import set_stream_router, StreamRouter
+    # StreamRouter will be wired after deps is assembled (needs model_router)
+
     deps = assemble_deps()
     app.state.deps = deps
+
+    # Wire StreamRouter after deps is assembled (needs model_router and event_bus)
+    try:
+        from app.runtime.stream_router import set_stream_router, StreamRouter
+        stream_router = StreamRouter(
+            model_router=deps.model_router,
+            event_emitter=deps.event_bus.publish,
+        )
+        set_stream_router(stream_router)
+        logger.info("Stream router initialized")
+    except Exception as exc:
+        logger.warning("Failed to initialize stream router: %s", exc)
 
     await bootstrap(deps)
 
