@@ -103,5 +103,6 @@ def _setup_recovery_routes(app: Any) -> None:
                 detail=str(exc)
             )
 
-    # Include router in app
-    app.include_router(recovery_router)
+
+# Auto-register routes at module load time (decorators register them)
+_setup_recovery_routes(None)
