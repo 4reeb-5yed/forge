@@ -83,12 +83,31 @@ Each session targets a single repository. There's no support for builds that spa
 
 Workspaces are created per-task with a hard ceiling (default 10 concurrent) and orphan reaping. The reaper destroys workspaces whose owning task is no longer active and whose age exceeds `max_workspace_age` (default 1 hour). For long-running deployments, consider monitoring disk usage of the workspace volume.
 
+### 9. Sandboxed Coding Tool Has Full Network Egress (Known Gap)
+
+`SandboxedAiderTool` is documented and designed to run with `--network none` (`allow_network=False`), but that configuration makes it impossible for Aider inside the sandbox to reach OpenRouter at all — every sandboxed task would silently produce zero file changes. As a functional stopgap, `bootstrap.py` constructs the tool with `allow_network=True`, restoring functionality but granting the sandbox full outbound network access rather than access scoped to OpenRouter only.
+
+**Impact:** AI-generated code running inside the sandbox can, in principle, reach arbitrary external hosts. This is a real reduction of the isolation guarantee described in [docs/12-SECURITY.md](./12-SECURITY.md#known-gap-network-egress-is-not-scoped-to-openrouter) — do not rely on network isolation as a defense-in-depth layer until this is resolved.
+
+**Planned fix:** a forward-proxy sidecar (e.g. Squid) allowlisting only `openrouter.ai` by SNI/hostname, with the sandbox container joining an internal, no-internet network and routing through the proxy. This is real infrastructure work (new container, proxy config, `docker-compose.yml`/`sandboxed_aider.py` wiring) and is tracked as follow-up, not yet scheduled.
+
+### 10. `commit_node` Misreports "Nothing to Commit" as a Failure
+
+When a task's coding-tool run produces no net file changes (e.g. the file already matched the target state, or the tool silently no-op'd), `commit_node` currently reports this the same way as a genuine commit/push failure: a `commit_shas` entry of `failed-<hex>` with no corresponding entry in `errors`. This makes it hard to distinguish "there was truly nothing new to do" from "the commit or push actually failed" by looking at the API response alone — you have to inspect server logs or the workspace/repo directly to tell them apart. Not yet fixed; tracked as a follow-up observability improvement.
+
+### 11. `SandboxedAiderTool`'s Output Is Discarded on the Success Path
+
+`execute_node` only reads `result.error` when `result.success` is `False`. On success, `result.output` — which for `SandboxedAiderTool` includes the full Aider transcript plus the captured `git diff` (the "diff audit logging" feature described in [docs/12-SECURITY.md](./12-SECURITY.md)) — is discarded entirely and never logged, recorded, or otherwise surfaced. In practice this means there is currently no audit trail of what a successful coding-tool run actually did, undermining the diff-audit-logging security property for the common case (a task that succeeds). Not yet fixed; tracked as a follow-up.
+
 ## Planned Improvements
 
 ### Short-Term (Next Sprint)
 
 | Improvement | Description |
 |------------|-------------|
+| OpenRouter-only network egress for sandbox | Forward-proxy sidecar (SNI-based allowlist) to close the `allow_network=True` gap — see Known Limitation #9 |
+| Fix `commit_node`'s no-op vs. failure reporting | Distinguish "nothing new to commit" from an actual commit/push failure in the API response — see Known Limitation #10 |
+| Surface `SandboxedAiderTool` output on success | Log/record the Aider transcript + diff on successful runs, not just failures — see Known Limitation #11 |
 | Wire PostgreSQL stores | Replace in-memory stores in `assemble_deps()` with real DB stores |
 | Frontend approval UI | Surface `approval_pending` state with approve/reject buttons |
 | gVisor/Firecracker option | Stronger sandbox than Docker for untrusted code execution |

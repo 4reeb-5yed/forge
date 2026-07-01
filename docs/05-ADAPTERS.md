@@ -109,7 +109,7 @@ class GitHubVCS:
 
 ### Token Handling & Security
 
-1. **Token injection:** Transforms `https://github.com/owner/repo` into `https://{token}@github.com/owner/repo`
+1. **Token injection:** Transforms `https://github.com/owner/repo` into `https://x-access-token:{token}@github.com/owner/repo`. The token must go in the *password* position (using GitHub's documented `x-access-token` placeholder username), not the username position — a username-only userinfo (`{token}@host`) leaves git without a password, and git's http backend then tries to prompt for one interactively, which fails with `could not read Password ... No such device or address` in any non-interactive/non-TTY environment (e.g. inside a Docker container).
 2. **Never logged:** The `_run_git()` method never logs arguments that might contain the token
 3. **Sanitized errors (clone/push only):** Error messages from `clone()` and `push()` pass through `_sanitize()`, which replaces the token with `***`. Error messages from `commit()` (`git add failed`, `git commit failed`, `git rev-parse failed`) are raised unsanitized — low risk since the token is not part of the commit command, but be aware these paths do not call `_sanitize()`
 4. **Memory-only:** Token lives only in the adapter instance, never serialized
@@ -117,7 +117,7 @@ class GitHubVCS:
 ### Clone Strategy
 
 ```bash
-git clone --depth=1 --branch {ref} https://{token}@github.com/owner/repo {dest}
+git clone --depth=1 --branch {ref} https://x-access-token:{token}@github.com/owner/repo {dest}
 ```
 
 - Shallow clone (`--depth=1`) for speed
@@ -221,7 +221,7 @@ Spawns [Aider](https://aider.chat) as a subprocess to execute coding tasks. Aide
 | `AIDER_MODEL` | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` | Model for Aider to use |
 | Timeout | 300s (5 min) | Process kill on timeout |
 
-> **Different default from SandboxedAiderTool:** `AiderTool`'s hardcoded `DEFAULT_MODEL` (`openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`, a free-tier model) is **not the same** as `SandboxedAiderTool`'s hardcoded `DEFAULT_MODEL` (`claude-sonnet-4-20250514`, see below). Both read from the same `AIDER_MODEL` env var if set, but if unset they fall back to different values. Don't assume the two tools share configuration — check the source of the tool actually in use.
+> **Different default from SandboxedAiderTool:** `AiderTool`'s hardcoded `DEFAULT_MODEL` (`openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`, a free-tier model) is **not the same** as `SandboxedAiderTool`'s hardcoded `DEFAULT_MODEL` (`openrouter/anthropic/claude-3-haiku`, see below). Both read from the same `AIDER_MODEL` env var if set, but if unset they fall back to different values. Don't assume the two tools share configuration — check the source of the tool actually in use. Both defaults are, correctly, OpenRouter-routed model names — do not set `AIDER_MODEL` to a raw provider model name (e.g. `claude-sonnet-4-20250514`), as that will cause silent, zero-effect failures in the sandboxed tool (see the Sandboxed Aider Tool section below).
 
 ### Class: `AiderTool`
 
@@ -285,12 +285,14 @@ The direct `AiderTool` runs with the same privileges as the Forge backend proces
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `FORGE_USE_SANDBOX` | `auto` | `auto` / `always` / `never` — controls which tool is used |
-| `AIDER_MODEL` | `claude-sonnet-4-20250514` | Model for Aider |
+| `AIDER_MODEL` | `openrouter/anthropic/claude-3-haiku` | Model for Aider. Must be an OpenRouter-routed name — see note below |
 | Timeout | 300s | Container killed on timeout |
 | Image | `forge-aider-sandbox:latest` | Docker image to use |
 | Memory | `2g` | Container memory limit |
 | CPU | `2.0` | Container CPU limit |
 | PIDs | `256` | Max processes inside container |
+
+> **Model must be OpenRouter-routed:** the sandbox only ever receives `OPENROUTER_API_KEY` (never `ANTHROPIC_API_KEY` or any other provider key, by design). A raw provider model name like `claude-sonnet-4-20250514` makes Aider try to call Anthropic directly, which fails with `litellm.AuthenticationError: Missing Anthropic API Key` — a failure Aider does not treat as fatal, so it exits 0 with zero file changes and no error surfaced to Forge. Always use the `openrouter/<provider>/<model>` form. Also be mindful of account credit limits: pricier models (e.g. `openrouter/anthropic/claude-sonnet-4`) can fail with a 402 "requires more credits" error on accounts with limited balance — this is likewise not surfaced as a tool error and silently produces zero file changes. `claude-3-haiku` is used as the default specifically because it's low-cost.
 
 ### Class: `SandboxedAiderTool`
 
@@ -304,9 +306,11 @@ class SandboxedAiderTool:
 
 ### Security Properties
 
+> **Known gap:** despite the table below, network isolation is **not currently enforced**. `bootstrap.py` constructs this tool with `allow_network=True` as a functional stopgap, because `--network none` makes it impossible for Aider to reach OpenRouter at all. Full details, rationale, and the intended fix are in [docs/12-SECURITY.md](./12-SECURITY.md#known-gap-network-egress-is-not-scoped-to-openrouter).
+
 | Control | Implementation |
 |---------|---------------|
-| Network isolation | `--network none` |
+| Network isolation | `--network none` when `allow_network=False` (default) — **currently overridden to `allow_network=True` in bootstrap.py; see gap above** |
 | Non-root execution | `--user 1000:1000` |
 | Read-only root filesystem | `--read-only` |
 | All capabilities dropped | `--cap-drop ALL` |
