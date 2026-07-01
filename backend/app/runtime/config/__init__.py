@@ -244,7 +244,7 @@ class ConfigService:
             state = ConfigState()
             state.openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
             state.github_token = os.environ.get("GITHUB_TOKEN", "")
-            state.selected_model = os.environ.get("FORGE_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
+            state.selected_model = os.environ.get("FORGE_MODEL", "anthropic/claude-3-haiku")
             sandbox_env = os.environ.get("FORGE_USE_SANDBOX", "auto")
             try:
                 state.sandbox_mode = SandboxMode(sandbox_env)
@@ -270,7 +270,7 @@ class ConfigService:
             state = ConfigState()
             state.openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
             state.github_token = os.environ.get("GITHUB_TOKEN", "")
-            state.selected_model = os.environ.get("FORGE_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
+            state.selected_model = os.environ.get("FORGE_MODEL", "anthropic/claude-3-haiku")
             self._state = state
             await self._emit_config_error(
                 code="CONFIG_FILE_CORRUPT",

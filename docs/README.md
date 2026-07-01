@@ -18,6 +18,7 @@ Welcome to the Forge documentation. This suite is designed for senior developers
 | 10 | [Future](./10-FUTURE.md) | Roadmap, limitations, tradeoffs |
 | 11 | [File Structure](./11-FILE-STRUCTURE.md) | Complete project file tree |
 | 12 | [Security](./12-SECURITY.md) | Workspace sandboxing, scope checks, secret isolation |
+| 13 | [Troubleshooting](./13-TROUBLESHOOTING.md) | Common issues, solutions, and debugging tips |
 
 ## Other Resources
 

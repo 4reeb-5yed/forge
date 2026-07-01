@@ -24,6 +24,7 @@ Comprehensive documentation lives in [`docs/`](./docs/README.md):
 | [Future](./docs/10-FUTURE.md) | Roadmap, limitations, tradeoffs |
 | [Security](./docs/12-SECURITY.md) | Workspace sandboxing, scope checks, secret isolation |
 | [File Structure](./docs/11-FILE-STRUCTURE.md) | Complete project file tree |
+| [Troubleshooting](./docs/13-TROUBLESHOOTING.md) | Common issues, solutions, and debugging tips |
 
 ## What It Does
 

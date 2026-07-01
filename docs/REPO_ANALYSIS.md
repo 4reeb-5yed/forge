@@ -8,7 +8,15 @@
 
 ## Executive Summary
 
-The Forge repository is **generally well-aligned with its documentation**. The architecture, code organization, and core components match the documented design. Minor discrepancies exist in test counts and runtime module classification, but these do not indicate broken functionality.
+The Forge repository is **generally well-aligned with its documentation**. The architecture, code organization, and core components match the documented design. 
+
+### Recent Fixes (2026-07-01)
+
+| Issue | Root Cause | Fix |
+|-------|------------|-----|
+| **Task ID type mismatch** | AI model generates integer IDs (1,2,3) but Task model expects strings | Added type conversion in architect.py |
+| **Rate limiting on free models** | Default model `nvidia/nemotron-3-ultra-550b-a55b:free` is rate-limited | Updated defaults to `anthropic/claude-3-haiku` |
+| **Config chain overwritten** | ConfigService overwrites bootstrap chain_config | Documented in troubleshooting guide |
 
 ---
 
