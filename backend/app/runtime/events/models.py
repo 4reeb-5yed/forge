@@ -140,11 +140,12 @@ class Event:
         payload: dict[str, Any] | None = None,
         causation_id: str | None = None,
         correlation_id: str | None = None,
-        event_id: str = "",
+        event_id: str | None = None,
         seq: int = 0,
         schema_version: int = 1,
     ) -> Event:
-        """Factory method that auto-fills timestamp and defaults."""
+        """Factory method that auto-fills timestamp and event_id if not provided."""
+        import uuid
         return Event(
             schema_version=schema_version,
             seq=seq,
@@ -155,7 +156,7 @@ class Event:
             payload=payload or {},
             causation_id=causation_id,
             correlation_id=correlation_id,
-            event_id=event_id,
+            event_id=event_id or str(uuid.uuid4()),
         )
 
 
