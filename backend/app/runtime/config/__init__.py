@@ -120,6 +120,8 @@ class ConfigService:
         self._state = ConfigState()
         self._deps: RuntimeDeps | None = None
         self._last_openrouter_key: str = ""
+        self._model_cache: list[dict[str, str]] | None = None
+        self._model_cache_time: float = 0.0
 
     @property
     def state(self) -> ConfigState:
@@ -378,6 +380,170 @@ class ConfigService:
             raise ValueError(
                 f"Unknown component '{component}'. Valid components: openrouter, github"
             )
+
+    async def get_component_health(self) -> dict[str, dict[str, Any]]:
+        """Probe all components and return per-component health status.
+
+        Components probed:
+        - openrouter: test API key validity via GET /models
+        - github: test token validity via GET /user
+        - docker: check if Docker CLI exists and sandbox image is present
+        - database: check if DATABASE_URL is set (placeholder — real check needs pool)
+        - event_bus: always healthy (in-process)
+
+        Returns dict mapping component name to {status, message, latency_ms}.
+        """
+        import shutil
+        import subprocess
+
+        health: dict[str, dict[str, Any]] = {}
+
+        # --- openrouter ---
+        if not self._state.openrouter_api_key:
+            health["openrouter"] = {
+                "status": "unhealthy",
+                "message": "API key not configured",
+                "latency_ms": None,
+            }
+        else:
+            result = await self._test_openrouter_key()
+            if result.success:
+                health["openrouter"] = {
+                    "status": "healthy",
+                    "message": "",
+                    "latency_ms": result.latency_ms,
+                }
+            else:
+                health["openrouter"] = {
+                    "status": "unhealthy",
+                    "message": result.error,
+                    "latency_ms": result.latency_ms,
+                }
+
+        # --- github ---
+        if not self._state.github_token:
+            health["github"] = {
+                "status": "unhealthy",
+                "message": "API key not configured",
+                "latency_ms": None,
+            }
+        else:
+            result = await self._test_github_key()
+            if result.success:
+                health["github"] = {
+                    "status": "healthy",
+                    "message": "",
+                    "latency_ms": result.latency_ms,
+                }
+            else:
+                health["github"] = {
+                    "status": "unhealthy",
+                    "message": result.error,
+                    "latency_ms": result.latency_ms,
+                }
+
+        # --- docker ---
+        docker_available = shutil.which("docker") is not None
+        if not docker_available:
+            health["docker"] = {
+                "status": "unhealthy",
+                "message": "Docker not found in PATH",
+                "latency_ms": None,
+            }
+        else:
+            try:
+                proc = subprocess.run(
+                    ["docker", "image", "inspect", "forge-aider-sandbox:latest"],
+                    capture_output=True,
+                    timeout=5,
+                )
+                if proc.returncode == 0:
+                    health["docker"] = {
+                        "status": "healthy",
+                        "message": "",
+                        "latency_ms": None,
+                    }
+                else:
+                    health["docker"] = {
+                        "status": "unhealthy",
+                        "message": "Sandbox image 'forge-aider-sandbox:latest' not found",
+                        "latency_ms": None,
+                    }
+            except (subprocess.TimeoutExpired, OSError) as exc:
+                health["docker"] = {
+                    "status": "unhealthy",
+                    "message": f"Docker probe failed: {exc}",
+                    "latency_ms": None,
+                }
+
+        # --- database ---
+        if os.environ.get("DATABASE_URL"):
+            health["database"] = {
+                "status": "healthy",
+                "message": "",
+                "latency_ms": None,
+            }
+        else:
+            health["database"] = {
+                "status": "unhealthy",
+                "message": "DATABASE_URL not set",
+                "latency_ms": None,
+            }
+
+        # --- event_bus ---
+        health["event_bus"] = {
+            "status": "healthy",
+            "message": "",
+            "latency_ms": None,
+        }
+
+        return health
+
+    async def get_models(self) -> list[dict[str, str]]:
+        """Fetch available models from OpenRouter, with TTL-based caching.
+
+        Returns list of {id, name} dicts.
+        Caches for self._state.model_cache_ttl_seconds.
+        Raises if OpenRouter key not configured.
+        """
+        import time
+
+        import httpx
+
+        if not self._state.openrouter_api_key:
+            raise ValueError("OpenRouter API key not configured")
+
+        now = time.time()
+        ttl = self._state.model_cache_ttl_seconds
+
+        # Return cached results if still fresh
+        if (
+            self._model_cache is not None
+            and (now - self._model_cache_time) < ttl
+        ):
+            return self._model_cache
+
+        # Fetch from OpenRouter
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                "https://openrouter.ai/api/v1/models",
+                headers={
+                    "Authorization": f"Bearer {self._state.openrouter_api_key}"
+                },
+            )
+            response.raise_for_status()
+
+        data = response.json()
+        models = [
+            {"id": m["id"], "name": m.get("name", m["id"])}
+            for m in data.get("data", [])
+        ]
+
+        # Cache results
+        self._model_cache = models
+        self._model_cache_time = time.time()
+
+        return models
 
     async def _test_openrouter_key(self, key: str | None = None) -> KeyTestResult:
         """Test an OpenRouter API key by fetching the models endpoint.

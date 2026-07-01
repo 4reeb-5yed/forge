@@ -60,6 +60,7 @@ cd backend
 DATABASE_URL=postgresql://forge:forge@localhost:5432/forge alembic upgrade head
 
 # The API is now running at http://localhost:8000
+# Open http://localhost:3000 for the frontend Setup Wizard
 ```
 
 ### Option 2: Local Development
@@ -184,6 +185,11 @@ Each node delegates to an existing runtime component. Conditional routing handle
 | GET | `/sessions/{id}/explain` | Last decision |
 | GET | `/sessions/{id}/artifacts/spec` | Get specification |
 | GET | `/capabilities` | Registry summary |
+| GET | `/config` | Current configuration (redacted) |
+| PUT | `/config` | Update configuration |
+| POST | `/config/test` | Test API key validity |
+| GET | `/config/health` | Per-component health |
+| GET | `/config/models` | Available AI models |
 | WS | `/sessions/{id}/events` | Real-time event stream |
 
 Auth: `Authorization: Bearer <FORGE_API_TOKEN>` on all endpoints.
@@ -227,11 +233,14 @@ pytest -k "properties"    # Property-based tests only
 
 - **Event Bus as single source of truth** — audit, WebSocket, learning are all subscribers
 - **Circuit breaker per AI provider** — dead providers ejected in milliseconds
-- **Secrets never persisted** — redacted at every serialization boundary
+- **Secrets never persisted in plaintext** — redacted at every serialization boundary, config file uses 0600 permissions
 - **Deterministic intent classification** — "stop" never depends on AI being reachable
 - **Workspace sandboxing** — each task runs in a Docker container with `--network none`, no host access, resource limits, and read-only rootfs. Only `OPENROUTER_API_KEY` reaches the sandbox.
 - **Pre-commit scope check** — AI changes to CI pipelines, secrets, Docker configs, and env files are blocked before commit
 - **Diff audit trail** — every AI-generated change is captured as a git diff and recorded in the audit log
+- **Setup Wizard** — first-run configuration via `/setup` page; no `.env` editing required
+- **Structured error responses** — all API errors return ErrorEnvelope with code, category, suggestion
+- **Real-time error surfacing** — error events flow from EventBus → WebSocket → frontend toasts + panel
 
 ## License
 

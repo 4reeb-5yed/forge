@@ -235,3 +235,212 @@ class TestConfigValidationError:
     def test_has_meaningful_str(self) -> None:
         err = ConfigValidationError({"sandbox_mode": "invalid"})
         assert "sandbox_mode" in str(err)
+
+
+
+class TestGetComponentHealth:
+    """Tests for ConfigService.get_component_health."""
+
+    async def test_get_component_health_all_healthy(
+        self, configured_service: ConfigService, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When all probes succeed, all components report healthy."""
+        from unittest.mock import AsyncMock, patch, MagicMock
+        import subprocess
+
+        # Mock openrouter key test to succeed
+        mock_or_result = MagicMock()
+        mock_or_result.success = True
+        mock_or_result.latency_ms = 150.0
+        mock_or_result.error = ""
+
+        # Mock github key test to succeed
+        mock_gh_result = MagicMock()
+        mock_gh_result.success = True
+        mock_gh_result.latency_ms = 120.0
+        mock_gh_result.error = ""
+
+        with patch.object(
+            configured_service, "_test_openrouter_key", new_callable=AsyncMock, return_value=mock_or_result
+        ), patch.object(
+            configured_service, "_test_github_key", new_callable=AsyncMock, return_value=mock_gh_result
+        ), patch("shutil.which", return_value="/usr/bin/docker"), patch(
+            "subprocess.run"
+        ) as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=b"", stderr=b""
+            )
+            monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/forge")
+
+            health = await configured_service.get_component_health()
+
+        assert health["openrouter"]["status"] == "healthy"
+        assert health["github"]["status"] == "healthy"
+        assert health["docker"]["status"] == "healthy"
+        assert health["database"]["status"] == "healthy"
+        assert health["event_bus"]["status"] == "healthy"
+
+    async def test_get_component_health_missing_keys(
+        self, service: ConfigService, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When API keys are not set, openrouter and github report unhealthy."""
+        from unittest.mock import patch
+
+        with patch("shutil.which", return_value="/usr/bin/docker"), patch(
+            "subprocess.run"
+        ) as mock_run:
+            import subprocess
+
+            mock_run.return_value = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=b"", stderr=b""
+            )
+            monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/forge")
+
+            health = await service.get_component_health()
+
+        assert health["openrouter"]["status"] == "unhealthy"
+        assert health["openrouter"]["message"] == "API key not configured"
+        assert health["github"]["status"] == "unhealthy"
+        assert health["github"]["message"] == "API key not configured"
+
+    async def test_get_component_health_docker_not_found(
+        self, service: ConfigService, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When docker is not in PATH, docker reports unhealthy."""
+        from unittest.mock import patch
+
+        with patch("shutil.which", return_value=None):
+            monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/forge")
+            health = await service.get_component_health()
+
+        assert health["docker"]["status"] == "unhealthy"
+        assert "not found" in health["docker"]["message"].lower()
+
+    async def test_get_component_health_database_url_not_set(
+        self, service: ConfigService, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When DATABASE_URL is not set, database reports unhealthy."""
+        from unittest.mock import patch
+
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+
+        with patch("shutil.which", return_value=None):
+            health = await service.get_component_health()
+
+        assert health["database"]["status"] == "unhealthy"
+        assert "DATABASE_URL" in health["database"]["message"]
+
+    async def test_get_component_health_event_bus_always_healthy(
+        self, service: ConfigService, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """event_bus is always healthy."""
+        from unittest.mock import patch
+
+        with patch("shutil.which", return_value=None):
+            monkeypatch.delenv("DATABASE_URL", raising=False)
+            health = await service.get_component_health()
+
+        assert health["event_bus"]["status"] == "healthy"
+
+
+class TestGetModels:
+    """Tests for ConfigService.get_models."""
+
+    async def test_get_models_raises_without_key(self, service: ConfigService) -> None:
+        """Raises ValueError when OpenRouter API key is not configured."""
+        with pytest.raises(ValueError, match="OpenRouter API key not configured"):
+            await service.get_models()
+
+    async def test_get_models_fetches_and_caches(
+        self, configured_service: ConfigService
+    ) -> None:
+        """Fetches models from OpenRouter and caches the result."""
+        from unittest.mock import AsyncMock, patch, MagicMock
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "data": [
+                {"id": "anthropic/claude-sonnet-4-20250514", "name": "Claude Sonnet"},
+                {"id": "openai/gpt-4o", "name": "GPT-4o"},
+            ]
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            models = await configured_service.get_models()
+
+        assert len(models) == 2
+        assert models[0] == {"id": "anthropic/claude-sonnet-4-20250514", "name": "Claude Sonnet"}
+        assert models[1] == {"id": "openai/gpt-4o", "name": "GPT-4o"}
+
+    async def test_get_models_caches_results(
+        self, configured_service: ConfigService
+    ) -> None:
+        """Second call returns cached results without making a second HTTP request."""
+        from unittest.mock import AsyncMock, patch, MagicMock
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "data": [
+                {"id": "anthropic/claude-sonnet-4-20250514", "name": "Claude Sonnet"},
+            ]
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("httpx.AsyncClient", return_value=mock_client) as mock_cls:
+            # First call — fetches from API
+            models1 = await configured_service.get_models()
+            # Second call — should use cache
+            models2 = await configured_service.get_models()
+
+        # httpx.AsyncClient should only have been instantiated once
+        assert mock_cls.call_count == 1
+        assert models1 == models2
+
+    async def test_get_models_refreshes_after_ttl(
+        self, configured_service: ConfigService
+    ) -> None:
+        """Cache is refreshed after TTL expires."""
+        import time
+        from unittest.mock import AsyncMock, patch, MagicMock
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "data": [
+                {"id": "openai/gpt-4o", "name": "GPT-4o"},
+            ]
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        # Set TTL very short so we can expire it
+        configured_service._state.model_cache_ttl_seconds = 1
+
+        with patch("httpx.AsyncClient", return_value=mock_client) as mock_cls:
+            # First call fetches
+            await configured_service.get_models()
+            assert mock_cls.call_count == 1
+
+            # Expire the cache manually
+            configured_service._model_cache_time = time.time() - 10
+
+            # Second call should re-fetch
+            await configured_service.get_models()
+            assert mock_cls.call_count == 2
