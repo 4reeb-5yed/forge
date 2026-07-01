@@ -52,13 +52,13 @@ async def _lifespan(app: FastAPI):
 
     # ──────────────────────────────────────────────────────────────────
     # Wire RuntimeDeps into the API layer's AppDependencies.
-    # This ensures all API endpoints use the same RuntimeInspector,
-    # SessionManager, InterruptHandler, and EventBus instances that the
-    # workflow layer uses — single shared set of runtime services.
+    # CRITICAL FIX: Set _deps directly on the api module object to avoid
+    # any import aliasing issues. Route handlers call get_deps() which
+    # reads this module-level variable at request time.
     # ──────────────────────────────────────────────────────────────────
-    from app.api import AppDependencies, SessionEventStore, set_deps as set_api_deps
+    import app.api as api_module
 
-    event_store = getattr(app.state, "event_store", None) or SessionEventStore()
+    event_store = getattr(app.state, "event_store", None) or api_module.SessionEventStore()
 
     # Subscribe the event store to the event bus so WebSocket gets events
     async def _forward_event(event):
@@ -66,13 +66,14 @@ async def _lifespan(app: FastAPI):
 
     deps.event_bus.subscribe("*", _forward_event, subscriber_id="api_event_store")
 
-    api_deps = AppDependencies(
+    api_deps = api_module.AppDependencies(
         session_manager=deps.session_manager,
         inspector=deps.inspector,
         interrupt_handler=deps.interrupt_handler,
         event_store=event_store,
     )
-    set_api_deps(api_deps)
+    # Set directly on the module global (most reliable method)
+    api_module._deps = api_deps
 
     logger.info(
         "API layer wired to RuntimeDeps (inspector=%s, session_manager=%s, interrupt_handler=%s)",
@@ -134,7 +135,7 @@ def create_app() -> FastAPI:
     # during the lifespan (bootstrap). This is done via a startup event
     # that calls set_deps() after the lifespan initializes RuntimeDeps.
     # ──────────────────────────────────────────────────────────────────
-    from app.api import create_app as create_api_app, AppDependencies, set_deps, SessionEventStore
+    from app.api import create_app as create_api_app, SessionEventStore
 
     # Create the event store (shared between API and event bus)
     event_store = SessionEventStore()

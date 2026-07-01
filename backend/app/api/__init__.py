@@ -172,9 +172,16 @@ class AppDependencies:
 # Module-level dependencies (set during app startup)
 _deps: AppDependencies | None = None
 
+# Reference to the main FastAPI app (set during create_app in workflow/app.py)
+_app_ref = None
+
 
 def get_deps() -> AppDependencies:
-    """Get the application dependencies."""
+    """Get the application dependencies.
+    
+    Reads from module-level _deps which is set by set_deps() during lifespan.
+    If not yet set, creates a default (only during testing).
+    """
     global _deps
     if _deps is None:
         _deps = AppDependencies()
@@ -185,6 +192,12 @@ def set_deps(deps: AppDependencies) -> None:
     """Set the application dependencies (called at startup)."""
     global _deps
     _deps = deps
+
+
+def set_app_ref(app) -> None:
+    """Store a reference to the main FastAPI app (unused, kept for compat)."""
+    global _app_ref
+    _app_ref = app
 
 
 # ---------------------------------------------------------------------------
