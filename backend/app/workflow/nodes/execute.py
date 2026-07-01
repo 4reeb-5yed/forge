@@ -69,16 +69,19 @@ def make_execute_node(deps: RuntimeDeps) -> NodeFn:
         # ─── Clone the repo into workspace ────────────────────────────────
         # Get repo_url from session context or state
         repo_url = state.get("repo_url", "")
+        logger.info("Execute node: repo_url=%s, vcs=%s", repo_url, deps.vcs)
         if repo_url and deps.vcs is not None:
             try:
                 # Clone into workspace (shallow, default branch)
+                logger.info("Cloning %s into %s", repo_url, workspace_path)
                 await deps.vcs.clone(
                     url=repo_url,
                     ref="main",
                     dest_path=workspace_path,
                 )
-                logger.info("Cloned %s into workspace %s", repo_url, workspace_path)
+                logger.info("Clone successful for %s", repo_url)
             except RuntimeError as exc:
+                logger.warning("Clone failed (main branch) for %s: %s", repo_url, exc)
                 # Try 'master' branch if 'main' fails
                 try:
                     await deps.vcs.clone(
@@ -86,7 +89,7 @@ def make_execute_node(deps: RuntimeDeps) -> NodeFn:
                         ref="master",
                         dest_path=workspace_path,
                     )
-                    logger.info("Cloned %s (master) into workspace %s", repo_url, workspace_path)
+                    logger.info("Clone successful for %s (master)", repo_url)
                 except RuntimeError:
                     logger.warning("Clone failed for %s: %s", repo_url, exc)
                     errors.append({
