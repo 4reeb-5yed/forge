@@ -1,6 +1,6 @@
 # Runtime Modules
 
-The runtime layer (`backend/app/runtime/`) contains 27 modules organized by concern. Each module follows the same structural pattern:
+The runtime layer (`backend/app/runtime/`) contains 30+ modules organized by concern. Each module follows the same structural pattern:
 
 - One module = one responsibility
 - Dependencies are injected as plain callables/objects (no framework DI container)
@@ -812,3 +812,184 @@ Domain types shared across runtime modules, defined once in `backend/app/runtime
 | `FileEntry`, `DigitalTwin` | Lean structured model of the repository. |
 
 `app/runtime/types.py` re-exports select shared types (e.g. `Health`, `PermanentError`) for backward-compatible imports across adapters and runtime modules.
+
+**Note:** `app/runtime/types.py` re-exports these types for backward compatibility.
+
+---
+
+## Production Modules
+
+These modules provide production-ready features for enterprise deployments.
+
+### `persistence.py` — PostgreSQL Persistence Layer
+
+**Purpose:** Database-backed implementations of runtime stores.
+
+**Key Classes:**
+- `PostgresSessionStore` — PostgreSQL session persistence
+- `PostgresAuditStore` — PostgreSQL audit persistence
+- `PostgresCheckpointStore` — PostgreSQL checkpoint persistence
+- `PostgresLearningStore` — PostgreSQL learning outcome persistence
+
+**Public API:**
+```python
+async def init_persistence(database_url: str, pool_size: int = 10) -> bool
+async def close_persistence() -> None
+def create_persistence_stores(pool) -> tuple[...PostgresXxxStore]
+```
+
+**Dependencies:** asyncpg, db/pool.py
+
+**Notes:** Auto-wired during bootstrap when `DATABASE_URL` is available. Falls back to in-memory stores for development.
+
+---
+
+### `approval.py` — Approval Gates
+
+**Purpose:** Human-in-the-loop approval before commits.
+
+**Key Classes:**
+- `ApprovalManager` — Manage approval requests and decisions
+- `ApprovalRequest` — Pending approval request
+- `ApprovalResult` — Decision result
+- `ApprovalStatus` — Enum: PENDING, APPROVED, REJECTED, EXPIRED, CANCELLED
+- `ApprovalType` — Enum: PRE_COMMIT, PRE_PUSH, PRE_TASK
+
+**Public API:**
+```python
+class ApprovalManager:
+    async def create_request(...) -> ApprovalRequest
+    async def wait_for_decision(...) -> ApprovalResult
+    async def approve(request_id, reviewer, comment) -> ApprovalResult
+    async def reject(request_id, reviewer, comment) -> ApprovalResult
+    def get_pending_requests(session_id) -> list[ApprovalRequest]
+```
+
+**Dependencies:** EventBus (emits approval events)
+
+**Events emitted:** `APPROVAL_REQUESTED`, `APPROVAL_APPROVED`, `APPROVAL_REJECTED`, `APPROVAL_EXPIRED`
+
+---
+
+### `scheduler.py` — Session Scheduler
+
+**Purpose:** Concurrent build execution with priority-based scheduling.
+
+**Key Classes:**
+- `SessionScheduler` — Priority queue for parallel session execution
+- `QueuedSession` — Queued session with metadata
+- `SchedulerStatus` — Enum: IDLE, RUNNING, PAUSED, STOPPED
+- `SessionStatus` — Enum: QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED
+
+**Public API:**
+```python
+class SessionScheduler:
+    async def enqueue(session_id, session_data, priority=0) -> None
+    async def start() -> None
+    async def stop() -> None
+    async def pause() -> None
+    async def resume() -> None
+    def get_running_sessions() -> list[str]
+```
+
+**Dependencies:** asyncio
+
+**Environment Variables:**
+- `FORGE_MAX_CONCURRENT` — Maximum concurrent sessions (default: 3)
+
+---
+
+### `build_timeout.py` — Build Timeout Manager
+
+**Purpose:** Auto-stop builds exceeding configurable timeout.
+
+**Key Classes:**
+- `BuildTimeoutManager` — Track and auto-stop long-running builds
+- `BuildTimeout` — Timeout state for a session
+
+**Public API:**
+```python
+class BuildTimeoutManager:
+    async def start_tracking(session_id, timeout_seconds=None) -> None
+    async def stop_tracking(session_id) -> None
+    async def extend_timeout(session_id, additional_seconds) -> bool
+    async def get_remaining_time(session_id) -> int | None
+```
+
+**Dependencies:** asyncio, InterruptHandler (optional)
+
+**Environment Variables:**
+- `FORGE_BUILD_TIMEOUT_SECONDS` — Default timeout (default: 1800 = 30 minutes)
+
+**Events emitted:** `BUILD_TIMEOUT_STARTED`, `BUILD_TIMEOUT_EXCEEDED`
+
+---
+
+### `learning_engine.py` — Learning Engine
+
+**Purpose:** Analyze failure patterns and generate recommendations.
+
+**Key Classes:**
+- `LearningEngine` — Pattern analysis and recommendations
+- `LearningPattern` — Identified pattern from outcomes
+- `ModelPerformance` — Model performance metrics
+- `ProviderHealth` — Provider health metrics
+- `LearningRecommendations` — Generated recommendations
+
+**Public API:**
+```python
+class LearningEngine:
+    async def analyze() -> LearningRecommendations
+    def _analyze_model_performance(outcomes) -> list[dict]
+    def _analyze_provider_health(outcomes) -> list[dict]
+    def _analyze_task_patterns(outcomes) -> list[dict]
+```
+
+**Dependencies:** LearningRecorder, datetime
+
+**Environment Variables:**
+- `FORGE_LEARNING_WINDOW_DAYS` — Analysis window (default: 7)
+
+---
+
+### `stream_router.py` — Stream Router
+
+**Purpose:** Real-time token streaming for AI completions.
+
+**Key Classes:**
+- `StreamRouter` — Streaming wrapper for AI responses
+
+**Public API:**
+```python
+class StreamRouter:
+    async def route_stream(role, messages, session_id) -> AsyncIterator[dict]
+```
+
+**Dependencies:** ModelRouter, EventBus
+
+**Notes:** Wraps the ModelRouter to emit TOKEN events for real-time frontend display.
+
+---
+
+### Workflow (`workflow/checkpoint_middleware.py`) — Checkpoint Middleware
+
+**Purpose:** Automatic workflow state persistence for crash recovery.
+
+**Key Classes:**
+- `CheckpointMiddleware` — Wrap workflow nodes for auto-checkpointing
+
+**Public API:**
+```python
+class CheckpointMiddleware:
+    def wrap_node(node_name, node_fn) -> Callable
+    async def checkpoint(session_id, node_id, state) -> None
+    async def recover(session_id) -> dict | None
+    async def list_recoverable_sessions() -> list[dict]
+```
+
+**Dependencies:** db/checkpoint_store
+
+**Environment Variables:**
+- `FORGE_CHECKPOINT_INTERVAL` — Seconds between checkpoints (default: 60)
+
+**Notes:** Automatically checkpoints after each node execution. Redacts sensitive data (tokens, secrets).

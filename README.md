@@ -4,6 +4,8 @@
 
 Forge is an autonomous software engineering runtime. Supply a GitHub repository URL and a plain-English goal — Forge plans, builds, reviews, verifies, and commits code, streaming every decision back in real time.
 
+> **Production Ready** — PostgreSQL persistence, approval gates, concurrent builds, sandbox enforcement, timeouts, checkpoint recovery, and learning engine included.
+
 ## Documentation
 
 Comprehensive documentation lives in [`docs/`](./docs/README.md):
@@ -33,6 +35,19 @@ Forge: clarify → architect → plan → execute → verify → commit → push
 Result: Working code committed to your repo with full audit trail
 ```
 
+## Production Features
+
+| Feature | Description |
+|---------|-------------|
+| **PostgreSQL Persistence** | Session, audit, and checkpoint stores backed by PostgreSQL |
+| **Approval Gates** | Human-in-the-loop review before commits with diff viewer |
+| **Concurrent Builds** | Parallel session execution with priority-based scheduling |
+| **Sandbox Enforcement** | `FORGE_USE_SANDBOX=always` for production security |
+| **Build Timeouts** | Auto-stop builds exceeding configurable timeout (default: 30 min) |
+| **Checkpoint Recovery** | Resume builds from last checkpoint after crashes |
+| **Learning Engine** | Pattern analysis for model/provider health and recommendations |
+| **Real-time Streaming** | AI token streaming to frontend via WebSocket events |
+
 ## Quick Start
 
 ### Option 1: Docker (recommended)
@@ -42,8 +57,7 @@ Result: Working code committed to your repo with full audit trail
 git clone https://github.com/4reeb-5yed/forge.git
 cd forge
 cp .env.docker .env.docker.local
-# Edit .env.docker.local with your API keys (OPENROUTER_API_KEY, GITHUB_TOKEN)
-# Set FORGE_USE_SANDBOX=always for production (hard failure if sandbox broken)
+# Edit .env.docker.local with your API keys
 
 # Build the sandbox image (required for secure AI code execution)
 cd backend
@@ -104,16 +118,25 @@ curl -X POST http://localhost:8000/workflow/invoke \
 ```
 ┌─────────────────────────────────────────────┐
 │  Frontend (Next.js + Tailwind)               │
+│  • Approval Banner & Modal                    │
+│  • Real-time Token Streaming                  │
 ├─────────────────────────────────────────────┤
 │  Application (FastAPI REST + WebSocket)       │
+│  • Approval API, Recovery API                 │
 ├─────────────────────────────────────────────┤
 │  Workflow (LangGraph state machine)           │
+│  • Checkpoint Middleware                      │
 ├─────────────────────────────────────────────┤
-│  Runtime (asyncio core — 27 runtime modules)  │
+│  Runtime (asyncio core — 30+ runtime modules) │
+│  • SessionScheduler, BuildTimeoutManager      │
+│  • ApprovalManager, LearningEngine            │
+│  • StreamRouter, CheckpointMiddleware         │
 ├─────────────────────────────────────────────┤
 │  Adapters (OpenRouter, GitHub, Aider)        │
 ├─────────────────────────────────────────────┤
 │  Infrastructure (PostgreSQL, Docker)          │
+│  • Session Store, Audit Store                 │
+│  • Checkpoint Store, Learning Store           │
 └─────────────────────────────────────────────┘
 ```
 
@@ -124,15 +147,28 @@ forge/
 ├── frontend/                   # Next.js responsive UI
 │   ├── app/                   # App Router pages
 │   ├── components/            # React components
-│   └── package.json
+│   │   ├── ApprovalBanner.tsx  # Approval gate alert
+│   │   └── ApprovalModal.tsx   # Diff review modal
+│   └── lib/
+│       └── approval.ts         # Approval API client
 ├── backend/
 │   ├── app/
-│   │   ├── api/               # REST + WebSocket endpoints + auth
+│   │   ├── api/               # REST + WebSocket endpoints
+│   │   │   ├── approval.py    # Approval gates API
+│   │   │   ├── recovery.py    # Checkpoint recovery API
+│   │   │   └── ...
 │   │   ├── adapters/          # OpenRouter, GitHub VCS, Aider, Sandboxed Aider, OpenHands
 │   │   ├── workflow/          # LangGraph state machine (13 nodes)
-│   │   ├── runtime/           # Core logic (27 runtime modules)
-│   │   │   ├── verification/  # scope_check.py (pre-commit security)
-│   │   │   └── workspace/     # Isolated workspaces with hard limits
+│   │   │   ├── checkpoint_middleware.py  # Auto-checkpointing
+│   │   │   └── ...
+│   │   ├── runtime/           # Core logic (30+ runtime modules)
+│   │   │   ├── approval.py         # Human approval gates
+│   │   │   ├── scheduler.py        # Concurrent builds
+│   │   │   ├── build_timeout.py    # Auto-stop timeouts
+│   │   │   ├── persistence.py       # PostgreSQL stores
+│   │   │   ├── learning_engine.py   # Pattern analysis
+│   │   │   ├── stream_router.py    # AI token streaming
+│   │   │   └── ...
 │   │   └── db/               # PostgreSQL stores (asyncpg)
 │   ├── alembic/              # Database migrations
 │   ├── config/               # YAML configuration
@@ -157,6 +193,7 @@ Each node delegates to an existing runtime component. Conditional routing handle
 - **Status queries** → answered from inspector without AI
 - **Interrupts** → pause/resume/redirect/stop within 2 seconds
 - **Verification failures** → policy engine decides retry/escalate/skip
+- **Checkpointing** → automatic after each node for crash recovery
 
 ## Adapters
 
@@ -169,6 +206,8 @@ Each node delegates to an existing runtime component. Conditional routing handle
 | OpenHands | all-hands.dev | Cloud coding agent (alternative to Aider, requires API key) |
 
 ## API
+
+### Core Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -185,14 +224,36 @@ Each node delegates to an existing runtime component. Conditional routing handle
 | POST | `/sessions/{id}/stop` | Stop |
 | GET | `/sessions/{id}/status` | Runtime status |
 | GET | `/sessions/{id}/explain` | Last decision |
-| GET | `/sessions/{id}/artifacts/spec` | Get specification |
+| WS | `/sessions/{id}/events` | Real-time event stream |
+
+### Approval Gates
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/approval/pending/{session_id}` | List pending approvals |
+| GET | `/approval/{request_id}` | Get approval request |
+| GET | `/approval/{request_id}/diff` | Get full diff |
+| POST | `/approval/{request_id}/approve` | Approve changes |
+| POST | `/approval/{request_id}/reject` | Reject changes |
+
+### Recovery
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/recovery/sessions` | List recoverable sessions |
+| GET | `/recovery/sessions/{id}` | Get checkpoint data |
+| POST | `/recovery/sessions/{id}/resume` | Resume from checkpoint |
+
+### Configuration
+
+| Method | Path | Description |
+|--------|------|-------------|
 | GET | `/capabilities` | Registry summary |
 | GET | `/config` | Current configuration (redacted) |
 | PUT | `/config` | Update configuration |
 | POST | `/config/test` | Test API key validity |
 | GET | `/config/health` | Per-component health |
 | GET | `/config/models` | Available AI models |
-| WS | `/sessions/{id}/events` | Real-time event stream |
 
 Auth: `Authorization: Bearer <FORGE_API_TOKEN>` on all endpoints.
 
@@ -213,7 +274,7 @@ Auth: `Authorization: Bearer <FORGE_API_TOKEN>` on all endpoints.
 |----------|----------|-------------|
 | `OPENROUTER_API_KEY` | Yes | OpenRouter API key for AI completions |
 | `GITHUB_TOKEN` | Yes | GitHub personal access token |
-| `DATABASE_URL` | For Docker | PostgreSQL connection string |
+| `DATABASE_URL` | Production | PostgreSQL connection string |
 | `FORGE_API_TOKEN` | Yes | Bearer token for API auth |
 | `FORGE_AUTH_DISABLED` | No | Set `true` to disable auth (development only) |
 | `AIDER_MODEL` | No | Model for Aider subprocess. Must be an OpenRouter-routed name (`openrouter/<provider>/<model>`) since only `OPENROUTER_API_KEY` ever reaches the coding tool. Direct `AiderTool` defaults to `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`; `SandboxedAiderTool` (the default/recommended adapter) defaults to `openrouter/anthropic/claude-3-haiku` instead — the two tools have different hardcoded defaults |
@@ -223,6 +284,10 @@ Auth: `Authorization: Bearer <FORGE_API_TOKEN>` on all endpoints.
 | `DATABASE_POOL_SIZE` | No | Maximum PostgreSQL connection pool size (default: 10) |
 | `FORGE_TOKEN_LIMIT` | No | Overrides the default session token budget |
 | `FORGE_CONFIG_PATH` | No | Path to the persisted runtime config JSON used by ConfigService (default: `/data/forge-config.json`) |
+| `FORGE_BUILD_TIMEOUT_SECONDS` | No | Build timeout in seconds (default: 1800 = 30 minutes) |
+| `FORGE_MAX_CONCURRENT` | No | Max concurrent builds (default: 3) |
+| `FORGE_CHECKPOINT_INTERVAL` | No | Checkpoint interval in seconds (default: 60) |
+| `FORGE_LEARNING_WINDOW_DAYS` | No | Learning analysis window in days (default: 7) |
 | `NEXT_PUBLIC_WS_URL` | No | WebSocket backend URL for frontend (default: `ws://localhost:8000`) |
 
 ## Testing
@@ -237,16 +302,21 @@ pytest -k "properties"    # Property-based tests only
 
 ## Key Design Decisions
 
-- **Event Bus as single source of truth** — audit, WebSocket, learning are all subscribers
+- **Event Bus as single source of truth** — audit, WebSocket, learning, approvals are all subscribers
 - **Circuit breaker per AI provider** — dead providers ejected in milliseconds
 - **Secrets never persisted in plaintext** — redacted at every serialization boundary, config file uses 0600 permissions
 - **Deterministic intent classification** — "stop" never depends on AI being reachable
 - **Workspace sandboxing** — each task runs in a Docker container with no host access, resource limits, and read-only rootfs. Only `OPENROUTER_API_KEY` and `HOME` reach the sandbox. **Known gap:** the container currently runs with full network egress (`allow_network=True`), not `--network none` — a fully network-isolated container cannot reach OpenRouter at all, so egress is enabled as a functional stopgap until an OpenRouter-only proxy allowlist is implemented. See [Security](./docs/12-SECURITY.md#known-gap-network-egress-is-not-scoped-to-openrouter).
 - **Pre-commit scope check** — AI changes to CI pipelines, secrets, Docker configs, and env files are blocked before commit
 - **Diff audit trail** — every AI-generated change is captured as a git diff and recorded in the audit log
+- **Approval gates** — human review before commits with full diff visibility
+- **Checkpoint recovery** — automatic state persistence for crash recovery
 - **Setup Wizard** — first-run configuration via `/setup` page; no `.env` editing required
 - **Structured error responses** — all API errors return ErrorEnvelope with code, category, suggestion
 - **Real-time error surfacing** — error events flow from EventBus → WebSocket → frontend toasts + panel
+- **Concurrent builds** — multiple sessions run in parallel with priority scheduling
+- **Build timeouts** — auto-stop builds exceeding configurable duration
+- **Learning engine** — pattern analysis for model/provider health
 
 ## License
 
