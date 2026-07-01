@@ -11,6 +11,7 @@ Requirements: 16.1, 16.2, 16.3, 16.4
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -46,7 +47,28 @@ class InvokeResponse(BaseModel):
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     """Application lifespan: bootstrap on startup, cleanup on shutdown."""
-    # Startup
+    # Startup: Initialize PostgreSQL pool first if DATABASE_URL is available
+    pool = None
+    database_url = os.environ.get("DATABASE_URL", "")
+    if database_url:
+        try:
+            from app.db.pool import create_pool
+            pool = await create_pool()
+            logger.info("PostgreSQL pool created during startup")
+        except Exception as exc:
+            logger.warning("Failed to create PostgreSQL pool: %s — using in-memory stores", exc)
+
+    # Wire pool into persistence module for later use
+    if pool:
+        from app.runtime import persistence as persist_module
+        persist_module._pool = pool
+
+    # Initialize and wire approval manager
+    from app.runtime.approval import ApprovalManager, set_approval_manager
+    approval_manager = ApprovalManager()
+    set_approval_manager(approval_manager)
+    logger.info("Approval manager initialized")
+
     deps = assemble_deps()
     app.state.deps = deps
 
@@ -109,6 +131,15 @@ async def _lifespan(app: FastAPI):
     except Exception:
         logger.exception("Error stopping health monitor during shutdown")
 
+    # Close PostgreSQL pool if it was created
+    if pool:
+        try:
+            from app.db.pool import close_pool
+            await close_pool()
+            logger.info("PostgreSQL pool closed during shutdown")
+        except Exception:
+            logger.exception("Error closing PostgreSQL pool during shutdown")
+
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application with the wired workflow.
@@ -160,6 +191,11 @@ def create_app() -> FastAPI:
     from app.api.config import config_router
 
     app.include_router(config_router)
+
+    # Mount the approval API router
+    from app.api.approval import approval_router
+
+    app.include_router(approval_router)
 
     @app.post("/workflow/invoke", response_model=InvokeResponse)
     async def invoke_workflow(request: InvokeRequest) -> InvokeResponse:

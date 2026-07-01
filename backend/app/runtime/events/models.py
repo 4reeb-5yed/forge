@@ -57,13 +57,16 @@ class EventType(str, Enum):
     COMMIT_FAILED = "commit.failed"
 
     # Approval gates
-    APPROVAL_PENDING = "approval.pending"
+    APPROVAL_REQUESTED = "approval.requested"
+    APPROVAL_APPROVED = "approval.approved"
+    APPROVAL_REJECTED = "approval.rejected"
+    APPROVAL_EXPIRED = "approval.expired"
+    APPROVAL_CANCELLED = "approval.cancelled"
 
     # Error events
     CONFIG_ERROR = "error.config"
     RUNTIME_ERROR = "error.runtime"
     WORKFLOW_ERROR = "error.workflow"
-    APPROVAL_REJECTED = "approval.rejected"
 
     # Documentation
     DOC_UPDATED = "doc_updated"
@@ -72,6 +75,10 @@ class EventType(str, Enum):
     # Boot and readiness
     FORGE_BOOT_DISCOVERY_COMPLETE = "forge.boot.discovery_complete"
     FORGE_READY = "forge.ready"
+
+    # Build timeout
+    BUILD_TIMEOUT_STARTED = "build.timeout.started"
+    BUILD_TIMEOUT_EXCEEDED = "build.timeout.exceeded"
 
     # Interaction
     QUESTION = "question"
