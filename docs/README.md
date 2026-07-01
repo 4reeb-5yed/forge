@@ -19,6 +19,10 @@ Welcome to the Forge documentation. This suite is designed for senior developers
 | 11 | [File Structure](./11-FILE-STRUCTURE.md) | Complete project file tree |
 | 12 | [Security](./12-SECURITY.md) | Workspace sandboxing, scope checks, secret isolation |
 
+## Other Resources
+
+- [PR & Issue Reviews](./pr-reviews/README.md) — audits of external pull requests and branches evaluated for merge, with verified findings and mergeability recommendations.
+
 ## Quick Navigation
 
 - **New to the project?** Start with [Overview](./01-OVERVIEW.md) then [Architecture](./02-ARCHITECTURE.md).
