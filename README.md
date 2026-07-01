@@ -70,7 +70,7 @@ python -m venv .venv && source .venv/bin/activate  # or .venv\Scripts\activate o
 pip install -e ".[dev]"
 cp .env.example .env  # Edit with your keys
 
-# Run tests (1,330+ tests)
+# Run tests (1,310+ tests)
 pytest
 
 # Start the server
@@ -128,7 +128,7 @@ forge/
 │   │   ├── api/               # REST + WebSocket endpoints + auth
 │   │   ├── adapters/          # OpenRouter, GitHub VCS, Aider, Sandboxed Aider
 │   │   ├── workflow/          # LangGraph state machine (13 nodes)
-│   │   ├── runtime/           # Core logic (27 modules, 1,280+ tests)
+│   │   ├── runtime/           # Core logic (27 modules, 1,310+ tests)
 │   │   │   ├── verification/  # scope_check.py (pre-commit security)
 │   │   │   └── workspace/     # Isolated workspaces with hard limits
 │   │   └── db/               # PostgreSQL stores (asyncpg)
@@ -175,11 +175,15 @@ Each node delegates to an existing runtime component. Conditional routing handle
 | GET | `/sessions` | List sessions |
 | GET | `/sessions/{id}` | Get session |
 | DELETE | `/sessions/{id}` | Delete session |
+| POST | `/sessions/{id}/messages` | Send developer message |
 | POST | `/sessions/{id}/interrupt` | Pause build |
 | POST | `/sessions/{id}/resume` | Resume |
+| POST | `/sessions/{id}/redirect` | Redirect paused build |
 | POST | `/sessions/{id}/stop` | Stop |
 | GET | `/sessions/{id}/status` | Runtime status |
 | GET | `/sessions/{id}/explain` | Last decision |
+| GET | `/sessions/{id}/artifacts/spec` | Get specification |
+| GET | `/capabilities` | Registry summary |
 | WS | `/sessions/{id}/events` | Real-time event stream |
 
 Auth: `Authorization: Bearer <FORGE_API_TOKEN>` on all endpoints.
@@ -204,7 +208,8 @@ Auth: `Authorization: Bearer <FORGE_API_TOKEN>` on all endpoints.
 | `DATABASE_URL` | For Docker | PostgreSQL connection string |
 | `FORGE_API_TOKEN` | Yes | Bearer token for API auth |
 | `FORGE_AUTH_DISABLED` | No | Set `true` to disable auth (development only) |
-| `AIDER_MODEL` | No | Model for Aider (default: claude-sonnet-4-20250514) |
+| `AIDER_MODEL` | No | Model for Aider subprocess (default: claude-sonnet-4-20250514) |
+| `FORGE_MODEL` | No | AI model for workflow (default: nvidia/nemotron-3-ultra-550b-a55b:free) |
 | `FORGE_USE_SANDBOX` | No | Sandbox mode: `auto` (default), `always`, `never` |
 | `NEXT_PUBLIC_WS_URL` | No | WebSocket backend URL for frontend (default: `ws://localhost:8000`) |
 
@@ -212,7 +217,7 @@ Auth: `Authorization: Bearer <FORGE_API_TOKEN>` on all endpoints.
 
 ```bash
 cd backend
-pytest                    # Full suite (1,330+ tests)
+pytest                    # Full suite (1,310+ tests)
 pytest -x                 # Stop on first failure
 pytest tests/test_api.py  # Specific module
 pytest -k "properties"    # Property-based tests only

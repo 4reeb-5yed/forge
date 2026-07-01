@@ -26,7 +26,7 @@
 | PostgreSQL schema + stores + migrations | ✅ Ready to use |
 | Docker Compose deployment | ✅ Working |
 | Next.js frontend with real-time events | ✅ Working |
-| 1,330+ tests (unit + property-based + integration) | ✅ All passing |
+| 1,310+ tests (unit + property-based + integration) | ✅ All passing |
 | API authentication (Bearer token) | ✅ Working |
 | WebSocket event streaming | ✅ Working |
 | Boundary enforcement (architectural drift prevention) | ✅ Working |
@@ -117,7 +117,7 @@ Workspaces are created per-task with a hard ceiling (default 10 concurrent) and 
 
 ### 1. Testability
 
-Every module depends on protocols, not implementations. The entire runtime is testable without any external services, yielding 1,240+ fast tests.
+Every module depends on protocols, not implementations. The entire runtime is testable without any external services, yielding 1,310+ fast tests.
 
 ### 2. Observability
 

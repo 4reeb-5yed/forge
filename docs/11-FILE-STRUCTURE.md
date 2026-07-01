@@ -21,7 +21,8 @@ forge/
 │   ├── 08-DEPLOYMENT.md                           # Docker, env vars, scaling
 │   ├── 09-TESTING.md                              # Test strategy + properties
 │   ├── 10-FUTURE.md                               # Roadmap + tradeoffs
-│   └── 11-FILE-STRUCTURE.md                       # This file
+│   ├── 11-FILE-STRUCTURE.md                       # This file
+│   └── 12-SECURITY.md                             # Sandbox, scope check, secret isolation
 │
 ├── frontend/                                      # Next.js responsive UI
 │   ├── app/
@@ -44,6 +45,7 @@ forge/
 │
 ├── backend/                                       # Python backend
 │   ├── Dockerfile                                 # Multi-stage build
+│   ├── Dockerfile.sandbox                         # Aider sandbox image (read-only, non-root)
 │   ├── main.py                                    # uvicorn entry point
 │   ├── pyproject.toml                             # Dependencies + config
 │   ├── .env.example                               # Local env template
@@ -58,6 +60,7 @@ forge/
 │   │       └── 001_initial_schema.py              # sessions, audit_log, checkpoints, learning
 │   │
 │   ├── config/                                    # YAML configuration
+│   │   ├── adapters.yaml                          # Adapter discovery (OpenRouter, GitHub, Aider)
 │   │   ├── models.yaml                            # AI provider fallback chains
 │   │   ├── policies.yaml                          # Retry/escalation rules
 │   │   ├── rate_limits.yaml                       # Token/cost limits
@@ -159,7 +162,8 @@ forge/
 │   │   │   │   └── __init__.py                    # Sequential execution + isolation
 │   │   │   │
 │   │   │   ├── verification/                      # Verification Pipeline
-│   │   │   │   └── __init__.py                    # Advisory + blocking stages
+│   │   │   │   ├── __init__.py                    # Advisory + blocking stages
+│   │   │   │   └── scope_check.py                 # Pre-commit diff-scope security check
 │   │   │   │
 │   │   │   ├── policies/                          # Policy Engine
 │   │   │   │   └── __init__.py                    # Retry/escalate/skip decisions
@@ -205,7 +209,7 @@ forge/
 │   │   ├── ARCHITECTURE.md
 │   │   └── DEVELOPMENT.md
 │   │
-│   └── tests/                                     # 1,240+ tests
+│   └── tests/                                     # 1,310+ tests
 │       ├── __init__.py
 │       ├── test_adapters.py                       # Adapter unit tests (25)
 │       ├── test_api.py                            # API endpoint tests (34)
@@ -254,7 +258,10 @@ forge/
 │       ├── test_workflow_infra.py                  # Workflow infra tests
 │       ├── test_workflow_nodes.py                  # Workflow node tests
 │       ├── test_workspace.py                      # Workspace tests
-│       └── test_workspace_properties.py           # Workspace property tests
+│       ├── test_workspace_properties.py           # Workspace property tests
+│       ├── test_dependency_wiring.py              # API↔RuntimeDeps wiring regression tests
+│       ├── test_sandboxed_aider.py                # SandboxedAiderTool tests (44)
+│       └── test_scope_check.py                    # Scope check + workspace limit tests
 │
 └── .kiro/specs/                                   # Spec-driven development artifacts
     ├── forge-runtime/                             # Runtime spec (76 tasks, all complete)
@@ -278,13 +285,13 @@ forge/
 |-----------|-------|-------------|
 | `frontend/` | 14 | Next.js app, components, config |
 | `backend/app/api/` | 2 | REST endpoints + auth |
-| `backend/app/adapters/` | 4 | OpenRouter, GitHub, Aider |
+| `backend/app/adapters/` | 5 | OpenRouter, GitHub, Aider, Sandboxed Aider |
 | `backend/app/workflow/` | 7 + 13 nodes = 20 | State machine + node functions |
-| `backend/app/runtime/` | 30 | Core business logic (27 modules + shared) |
+| `backend/app/runtime/` | 31 | Core business logic (27 modules + shared) |
 | `backend/app/db/` | 6 | PostgreSQL stores |
 | `backend/alembic/` | 4 | Database migrations |
-| `backend/config/` | 5 | YAML configuration |
-| `backend/tests/` | 45 | Unit + property-based tests |
-| `docs/` | 12 | Documentation suite |
+| `backend/config/` | 6 | YAML configuration |
+| `backend/tests/` | 48 | Unit + property-based + integration tests |
+| `docs/` | 13 | Documentation suite |
 | Root | 4 | README, docker-compose, .gitignore, .env.docker |
-| **Total (project files)** | **~160** | Excluding .venv, .kiro specs |
+| **Total (project files)** | **~165** | Excluding .venv, .kiro specs |
