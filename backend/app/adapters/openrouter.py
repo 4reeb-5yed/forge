@@ -83,6 +83,9 @@ class OpenRouterProvider:
             "messages": messages,
             **kwargs,
         }
+        # Default max_tokens to prevent excessive token requests
+        if "max_tokens" not in payload:
+            payload["max_tokens"] = 4096
 
         response = await client.post(
             f"{BASE_URL}/chat/completions",
@@ -94,7 +97,28 @@ class OpenRouterProvider:
             self._classify_error(response)
 
         data = response.json()
-        return data["choices"][0]["message"]["content"]
+        
+        # OpenRouter sometimes returns 200 with an error body
+        if "error" in data:
+            error_msg = data["error"].get("message", str(data["error"]))
+            error_code = data["error"].get("code", 500)
+            if error_code in (401, 403):
+                raise PermanentError(
+                    f"Authentication failed: {error_msg}",
+                    provider="openrouter",
+                    error_type="auth_failure",
+                )
+            raise RuntimeError(f"OpenRouter error: {error_msg}")
+
+        try:
+            return data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            # Log the unexpected response for debugging
+            logger.error("Unexpected OpenRouter response format: %s", str(data)[:500])
+            raise RuntimeError(
+                f"Unexpected response format from OpenRouter: {exc}. "
+                f"Response keys: {list(data.keys()) if isinstance(data, dict) else type(data)}"
+            ) from exc
 
     async def stream(
         self, messages: list[dict[str, Any]], model: str, **kwargs: Any
@@ -162,10 +186,20 @@ class OpenRouterProvider:
 
         The returned callable has signature:
             async (provider: str, model: str, messages: list, **kwargs) -> str
+        
+        Strips any kwargs not supported by the OpenRouter API before forwarding.
         """
+        # Keys that the OpenRouter API accepts (subset of OpenAI params)
+        _ALLOWED_PARAMS = {
+            "temperature", "top_p", "max_tokens", "stop", "presence_penalty",
+            "frequency_penalty", "logit_bias", "n", "stream", "response_format",
+            "seed", "tools", "tool_choice",
+        }
 
         async def _adapter(provider: str, model: str, messages: list, **kwargs: Any) -> str:
-            return await self.complete(messages=messages, model=model, **kwargs)
+            # Only pass API-compatible params; strip internal ones like estimated_tokens
+            api_kwargs = {k: v for k, v in kwargs.items() if k in _ALLOWED_PARAMS}
+            return await self.complete(messages=messages, model=model, **api_kwargs)
 
         return _adapter
 
