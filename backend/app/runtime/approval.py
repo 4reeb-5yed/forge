@@ -99,6 +99,15 @@ class ApprovalManager:
         self._results: dict[str, ApprovalResult] = {}
         self._event_emitter = event_emitter
 
+    def update_event_emitter(self, event_emitter: Any) -> None:
+        """Update the event emitter after initialization.
+
+        Args:
+            event_emitter: Event bus publisher function.
+        """
+        self._event_emitter = event_emitter
+        logger.debug("ApprovalManager event emitter updated")
+
     async def create_request(
         self,
         session_id: str,

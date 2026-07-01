@@ -55,6 +55,24 @@ class BuildTimeoutManager:
         self._builds: dict[str, BuildTimeout] = {}
         self._lock = asyncio.Lock()
 
+    def update_event_emitter(self, event_emitter: Any) -> None:
+        """Update the event emitter after initialization.
+
+        Args:
+            event_emitter: Event bus publisher function.
+        """
+        self._event_emitter = event_emitter
+        logger.debug("BuildTimeoutManager event emitter updated")
+
+    def update_interrupt_handler(self, interrupt_handler: Any) -> None:
+        """Update the interrupt handler after initialization.
+
+        Args:
+            interrupt_handler: Interrupt handler function.
+        """
+        self._interrupt_handler = interrupt_handler
+        logger.debug("BuildTimeoutManager interrupt handler updated")
+
     async def start_tracking(
         self,
         session_id: str,
