@@ -1,11 +1,17 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import ChatInput from "@/components/ChatInput";
 import ChatMessage, { Message } from "@/components/ChatMessage";
 import SessionList from "@/components/SessionList";
 import EventLog from "@/components/EventLog";
 import StatusBar from "@/components/StatusBar";
+import ErrorToast from "@/components/ErrorToast";
+import ErrorPanel from "@/components/ErrorPanel";
+import SetupBanner from "@/components/SetupBanner";
+import { useHealthPolling } from "@/lib/health";
+import { addError } from "@/lib/error-store";
 import {
   Session,
   SessionEvent,
@@ -16,13 +22,20 @@ import {
   resumeSession,
   stopSession,
   connectEventStream,
+  getConfig,
 } from "@/lib/api";
 
 export default function Home() {
+  const router = useRouter();
+
+  // Health polling
+  const { health, isConnected } = useHealthPolling(30000);
+
   // Session state
   const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [eventLogOpen, setEventLogOpen] = useState(true);
+  const [errorPanelOpen, setErrorPanelOpen] = useState(false);
 
   // Chat state
   const [messages, setMessages] = useState<Message[]>([]);
@@ -37,6 +50,21 @@ export default function Home() {
   const wsRef = useRef<WebSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const statusPollRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Redirect to /setup if not configured
+  useEffect(() => {
+    async function checkConfig() {
+      try {
+        const config = await getConfig();
+        if (!config.configured) {
+          router.push("/setup");
+        }
+      } catch {
+        // API not available yet, don't redirect
+      }
+    }
+    checkConfig();
+  }, [router]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -58,6 +86,17 @@ export default function Home() {
       activeSession.id,
       (event) => {
         setEvents((prev) => [...prev, event]);
+        // Route error events to the error store
+        if (event.type?.startsWith("error.") && event.payload) {
+          addError({
+            code: (event.payload.code as string) || "UNKNOWN",
+            message: (event.payload.message as string) || "An error occurred",
+            category: (event.payload.category as string) || "runtime",
+            recoverable: (event.payload.recoverable as boolean) ?? true,
+            timestamp: event.timestamp,
+            suggestion: event.payload.suggestion as string | undefined,
+          });
+        }
       },
       () => setWsConnected(false),
       () => setWsConnected(false)
@@ -191,7 +230,17 @@ export default function Home() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex flex-col h-screen overflow-hidden">
+      {/* Setup Banner */}
+      <SetupBanner health={health} />
+
+      {/* Error Toast notifications */}
+      <ErrorToast />
+
+      {/* Error Panel */}
+      <ErrorPanel isOpen={errorPanelOpen} onClose={() => setErrorPanelOpen(false)} />
+
+      <div className="flex flex-1 overflow-hidden">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
@@ -223,6 +272,9 @@ export default function Home() {
           onResume={handleResume}
           onStop={handleStop}
           isLoading={isInvoking}
+          health={health}
+          isConnected={isConnected}
+          onOpenErrorPanel={() => setErrorPanelOpen(true)}
         />
 
         {/* Mobile toolbar */}
@@ -329,6 +381,7 @@ export default function Home() {
           {eventLogOpen ? "Hide Log" : "Show Log"}
         </button>
       )}
+      </div>
     </div>
   );
 }

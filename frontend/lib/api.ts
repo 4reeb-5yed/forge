@@ -150,6 +150,83 @@ export async function stopSession(id: string): Promise<{ status: string }> {
 }
 
 // ---------------------------------------------------------------------------
+// Config & Health Types
+// ---------------------------------------------------------------------------
+
+export interface ErrorEnvelope {
+  code: string;
+  message: string;
+  category: string;
+  recoverable: boolean;
+  timestamp: string;
+  suggestion?: string;
+}
+
+export interface ComponentHealth {
+  status: "healthy" | "degraded" | "unhealthy";
+  message?: string;
+  latency_ms?: number;
+}
+
+export interface HealthResponse {
+  status: "healthy" | "degraded" | "unhealthy";
+  configured: boolean;
+  components: Record<string, ComponentHealth>;
+}
+
+export interface ConfigResponse {
+  configured: boolean;
+  openrouter_api_key: string;
+  github_token: string;
+  selected_model: string;
+  sandbox_mode: string;
+}
+
+export interface KeyTestResult {
+  success: boolean;
+  latency_ms: number;
+  error?: string;
+  details?: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
+// Config & Health Endpoints
+// ---------------------------------------------------------------------------
+
+export async function getConfig(): Promise<ConfigResponse> {
+  return request<ConfigResponse>("/config");
+}
+
+export async function updateConfig(payload: Partial<ConfigResponse>): Promise<ConfigResponse> {
+  return request<ConfigResponse>("/config", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function testConfigKey(component: string, key?: string): Promise<KeyTestResult> {
+  return request<KeyTestResult>("/config/test", {
+    method: "POST",
+    body: JSON.stringify({ component, key }),
+  });
+}
+
+export async function getConfigHealth(): Promise<Record<string, ComponentHealth>> {
+  return request<Record<string, ComponentHealth>>("/config/health");
+}
+
+export async function getConfigModels(): Promise<{ models: Array<{ id: string; name: string }> }> {
+  return request<{ models: Array<{ id: string; name: string }> }>("/config/models");
+}
+
+export async function getHealth(): Promise<HealthResponse> {
+  // Health endpoint has no auth requirement
+  const res = await fetch(`${BASE}/health`);
+  if (!res.ok) throw new Error(`Health check failed: ${res.status}`);
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
 // WebSocket
 // ---------------------------------------------------------------------------
 
@@ -166,25 +243,45 @@ export function connectEventStream(
       ? process.env.NEXT_PUBLIC_WS_URL
       : "ws://localhost:8000";
   const wsUrl = `${backendHost}/sessions/${sessionId}/events`;
-  const ws = new WebSocket(wsUrl);
 
-  ws.onmessage = (msg) => {
-    try {
-      const event: SessionEvent = JSON.parse(msg.data);
-      onEvent(event);
-    } catch {
-      console.error("Failed to parse event:", msg.data);
-    }
-  };
+  let lastSeq = 0;
+  let retryCount = 0;
+  const maxBackoff = 30000;
 
-  ws.onerror = (err) => {
-    console.error("WebSocket error:", err);
-    onError?.(err);
-  };
+  function connect(): WebSocket {
+    const url = lastSeq > 0 ? `${wsUrl}?since_seq=${lastSeq}` : wsUrl;
+    const ws = new WebSocket(url);
 
-  ws.onclose = () => {
-    onClose?.();
-  };
+    ws.onmessage = (msg) => {
+      try {
+        const event: SessionEvent = JSON.parse(msg.data);
+        if (event.seq) lastSeq = event.seq;
+        retryCount = 0;
+        onEvent(event);
+      } catch {
+        console.error("Failed to parse event:", msg.data);
+      }
+    };
 
-  return ws;
+    ws.onerror = (err) => {
+      console.error("WebSocket error:", err);
+      onError?.(err);
+    };
+
+    ws.onclose = () => {
+      onClose?.();
+      // Exponential backoff reconnection
+      const delay = Math.min(1000 * Math.pow(2, retryCount), maxBackoff);
+      retryCount++;
+      setTimeout(() => {
+        const newWs = connect();
+        // Update the reference for the caller
+        Object.assign(ws, newWs);
+      }, delay);
+    };
+
+    return ws;
+  }
+
+  return connect();
 }
