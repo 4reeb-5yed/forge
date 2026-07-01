@@ -17,9 +17,41 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from app.workflow.deps import RuntimeDeps
+import yaml
+
+from app.workflow.deps import RuntimeDeps, create_budget_factory
 
 logger = logging.getLogger(__name__)
+
+
+def load_role_chain_config(config_dir: str) -> dict[str, Any] | None:
+    """Load the role chain configuration from models.yaml.
+
+    Parses the YAML file and returns the 'roles' dict for use with
+    RoleChainConfig.from_yaml_dict(). Returns None if the file is not found
+    or cannot be parsed.
+
+    Args:
+        config_dir: Path to the configuration directory.
+
+    Returns:
+        The 'roles' dict from models.yaml, or None if not available.
+    """
+    models_yaml_path = Path(config_dir) / "models.yaml"
+    if not models_yaml_path.exists():
+        logger.warning("models.yaml not found at %s", models_yaml_path)
+        return None
+
+    try:
+        with open(models_yaml_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        return data.get("roles") if data else None
+    except yaml.YAMLError as exc:
+        logger.error("Failed to parse models.yaml: %s", exc)
+        return None
+    except OSError as exc:
+        logger.error("Failed to read models.yaml: %s", exc)
+        return None
 
 
 async def bootstrap(deps: RuntimeDeps) -> None:
@@ -176,17 +208,19 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
         call_adapter = _noop_call_adapter
         logger.warning("No OPENROUTER_API_KEY — using no-op call adapter (AI calls disabled)")
 
-    # Configure role chains — all roles use OpenRouter with Claude Sonnet 4
-    default_model = os.environ.get("FORGE_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
-    chain_config = RoleChainConfig(chains={
-        Role.CLARIFICATION: [ChainEntry(provider="openrouter", model=default_model)],
-        Role.ARCHITECT: [ChainEntry(provider="openrouter", model=default_model)],
-        Role.PLANNER: [ChainEntry(provider="openrouter", model=default_model)],
-        Role.CODER: [ChainEntry(provider="openrouter", model=default_model)],
-        Role.REVIEWER: [ChainEntry(provider="openrouter", model=default_model)],
-        Role.DOC_WRITER: [ChainEntry(provider="openrouter", model=default_model)],
-        Role.INTERRUPT_HANDLER: [ChainEntry(provider="openrouter", model=default_model)],
-    })
+    # Configure role chains — try loading from models.yaml, fall back to OpenRouter defaults
+    roles_config = load_role_chain_config(config_dir)
+    if roles_config:
+        try:
+            chain_config = RoleChainConfig.from_yaml_dict(roles_config)
+            logger.info("Loaded role chain config from models.yaml")
+        except Exception as exc:
+            logger.warning("Failed to parse models.yaml, using defaults: %s", exc)
+            chain_config = _create_default_chain_config()
+    else:
+        # Fallback: all roles use OpenRouter with FORGE_MODEL or default
+        chain_config = _create_default_chain_config()
+        logger.info("Using default role chain config (models.yaml not available)")
 
     # registry_checker: returns True if any healthy capability has the given provider_name
     def _check_provider(name: str) -> bool:
@@ -253,6 +287,7 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
         policy_engine=policy_engine,
         learning_recorder=learning_recorder,
         health_monitor=health_monitor,
+        budget_factory=create_budget_factory(config_dir),
         config_dir=config_dir,
     )
 
@@ -318,3 +353,25 @@ def _create_coding_tool():
 async def _noop_call_adapter(provider: str, model: str, messages: list, **kwargs) -> str:
     """No-op call adapter for development — no real AI calls."""
     return '{"result": "no-op"}'
+
+
+def _create_default_chain_config() -> RoleChainConfig:
+    """Create default chain config with all roles using OpenRouter.
+
+    Used when models.yaml is not available or fails to parse.
+    """
+    import os
+    from app.runtime.router import ChainEntry, Role, RoleChainConfig
+
+    default_model = os.environ.get(
+        "FORGE_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free"
+    )
+    return RoleChainConfig(chains={
+        Role.CLARIFICATION: [ChainEntry(provider="openrouter", model=default_model)],
+        Role.ARCHITECT: [ChainEntry(provider="openrouter", model=default_model)],
+        Role.PLANNER: [ChainEntry(provider="openrouter", model=default_model)],
+        Role.CODER: [ChainEntry(provider="openrouter", model=default_model)],
+        Role.REVIEWER: [ChainEntry(provider="openrouter", model=default_model)],
+        Role.DOC_WRITER: [ChainEntry(provider="openrouter", model=default_model)],
+        Role.INTERRUPT_HANDLER: [ChainEntry(provider="openrouter", model=default_model)],
+    })

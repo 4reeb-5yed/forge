@@ -10,7 +10,7 @@ import logging
 import os
 from dataclasses import dataclass
 
-from app.runtime.types import Health, ToolResult
+from app.shared import Health, ToolResult
 
 logger = logging.getLogger(__name__)
 

@@ -57,7 +57,7 @@ The project is **feature-complete for the core runtime**:
 
 | Area | Status |
 |------|--------|
-| Runtime core (27 modules) | ✅ Complete, 1,240+ tests passing |
+| Runtime core (27 modules) | ✅ Complete |
 | LangGraph workflow (13 nodes) | ✅ Wired and functional |
 | Adapters (OpenRouter, GitHub, Aider) | ✅ Implemented |
 | PostgreSQL persistence (4 tables) | ✅ Schema + stores ready |
@@ -71,7 +71,7 @@ The project is **feature-complete for the core runtime**:
 
 ### Works without any API keys (full test suite)
 
-- All 1,240+ unit and property-based tests
+- All unit and property-based tests
 - Event bus, registry, discovery, health monitoring
 - Policy engine, budget enforcement, interrupt handling
 - Workflow graph compilation and routing logic

@@ -26,8 +26,8 @@ rules:
 
   - on: verification_failure
     stage: security
-    decision: skip
-    max_attempts: 1
+    decision: retry
+    max_attempts: 2
 
   - on: tool_failure
     decision: escalate

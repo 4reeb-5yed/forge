@@ -12,7 +12,7 @@ import os
 import re
 from urllib.parse import urlparse, urlunparse
 
-from app.runtime.types import Health
+from app.shared import Health
 
 logger = logging.getLogger(__name__)
 
