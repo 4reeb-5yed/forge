@@ -21,7 +21,8 @@ DEFAULT_MODEL = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
 class AiderTool:
     """Aider coding tool that spawns aider as a subprocess.
 
-    Reads AIDER_MODEL from environment (default: claude-sonnet-4-20250514).
+    Reads AIDER_MODEL from environment (default: openrouter/anthropic/claude-3-haiku).
+    Uses OpenRouter API base for compatible model access.
     Configurable timeout with process kill on expiry.
     """
 
@@ -33,7 +34,9 @@ class AiderTool:
         model: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
     ) -> None:
-        self._model = model or os.environ.get("AIDER_MODEL", DEFAULT_MODEL)
+        # Default to OpenRouter model compatible with our API key
+        default_model = os.environ.get("AIDER_MODEL", "openrouter/anthropic/claude-3-haiku")
+        self._model = model or default_model
         self._timeout = timeout
 
     async def execute(
@@ -41,8 +44,8 @@ class AiderTool:
     ) -> ToolResult:
         """Execute a coding task using Aider.
 
-        Spawns `aider --yes --no-git --model {model} --message {task_description}`
-        in the workspace_path as cwd.
+        Spawns `aider --yes --no-gitignore --model {model} --message {task_description}`
+        in the workspace_path as cwd. Uses OpenRouter API for model access.
 
         Args:
             task_description: Natural language description of the coding task.
@@ -51,13 +54,23 @@ class AiderTool:
         Returns:
             ToolResult with success status, output, and error.
         """
+        # Check for AIDER_PATH env var first, then fall back to "aider"
+        aider_cmd = os.environ.get("AIDER_PATH", "aider")
         cmd = [
-            "aider",
+            aider_cmd,
             "--yes",
-            "--no-git",
+            "--no-gitignore",
+            "--no-git",  # Don't use git in workspace - parent repo handles that
+            "--no-auto-commits",
             "--model", self._model,
             "--message", task_description,
         ]
+
+        # Set up environment with OpenRouter API
+        env = os.environ.copy()
+        env["OPENAI_API_BASE"] = "https://openrouter.ai/api/v1"
+        if "OPENROUTER_API_KEY" in env:
+            env["OPENAI_API_KEY"] = env["OPENROUTER_API_KEY"]
 
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -65,6 +78,7 @@ class AiderTool:
                 cwd=workspace_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=env,
             )
 
             try:
