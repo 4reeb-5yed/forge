@@ -380,8 +380,18 @@ def _create_coding_tool():
 
     use_sandbox = os.environ.get("FORGE_USE_SANDBOX", "always")
 
-    if use_sandbox == "never":
+    # Check if Aider is available (via which or AIDER_PATH env var)
+    def _aider_available():
         if shutil.which("aider") is not None:
+            return True
+        # Also check AIDER_PATH env var
+        aider_path = os.environ.get("AIDER_PATH")
+        if aider_path and os.path.isfile(aider_path) and os.access(aider_path, os.X_OK):
+            return True
+        return False
+
+    if use_sandbox == "never":
+        if _aider_available():
             from app.adapters.aider_tool import AiderTool
             logger.info("Coding tool: AiderTool (sandbox disabled via FORGE_USE_SANDBOX=never)")
             return AiderTool()
@@ -415,7 +425,7 @@ def _create_coding_tool():
         )
 
     # Docker not available in auto mode - try unsandboxed AiderTool
-    if shutil.which("aider") is not None:
+    if _aider_available():
         from app.adapters.aider_tool import AiderTool
         logger.warning(
             "Coding tool: AiderTool (unsandboxed - Docker unavailable and auto mode)"
