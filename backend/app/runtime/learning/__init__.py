@@ -92,7 +92,7 @@ class Recommendation:
 class EventEmitter(Protocol):
     """Protocol for emitting events (decoupled from EventBus)."""
 
-    async def emit(self, event: Event) -> None: ...
+    async def publish(self, event: Event) -> Any: ...
 
 
 # ---------------------------------------------------------------------------
@@ -122,8 +122,8 @@ class LearningRecorder:
         """Initialize the LearningRecorder.
 
         Args:
-            event_emitter: Object with an async emit(event) method for
-                observability. If None, failure events are logged only.
+            event_emitter: Object with an async publish(event) method for
+                observability (e.g., EventBus). If None, failure events are logged only.
         """
         self._event_emitter = event_emitter
         # In-memory relational store: session_id -> list of outcomes
@@ -315,7 +315,7 @@ class LearningRecorder:
             },
         )
         try:
-            await self._event_emitter.emit(event)
+            await self._event_emitter.publish(event)
         except Exception:
             # If we can't even emit the error event, silently continue
             # to preserve the build result (Req 25.3).

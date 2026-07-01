@@ -85,7 +85,11 @@ def make_commit_node(deps: RuntimeDeps) -> NodeFn:
                     "current_task_index": current_task_index,
                     "all_tasks_done": False,
                     "node_path": node_path,
-                    "error": scope_result.reason,
+                    "errors": list(state.get("errors", [])) + [{
+                        "code": "scope_blocked",
+                        "message": scope_result.reason,
+                        "node": "commit",
+                    }],
                 }
 
         # ─── Commit the changes ──────────────────────────────────────────

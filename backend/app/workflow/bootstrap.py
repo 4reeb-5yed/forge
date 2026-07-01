@@ -183,7 +183,7 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
 
     # Policy & learning
     policy_engine = PolicyEngine(config=PolicyConfig())
-    learning_recorder = LearningRecorder()
+    learning_recorder = LearningRecorder(event_emitter=event_bus)
 
     # Health monitoring
     health_monitor = HealthMonitor(

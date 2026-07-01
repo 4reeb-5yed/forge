@@ -32,8 +32,9 @@ class FakeEventEmitter:
     def __init__(self) -> None:
         self.events: list[Event] = []
 
-    async def emit(self, event: Event) -> None:
+    async def publish(self, event: Event) -> Event:
         self.events.append(event)
+        return event
 
     def last_event(self) -> Event | None:
         return self.events[-1] if self.events else None

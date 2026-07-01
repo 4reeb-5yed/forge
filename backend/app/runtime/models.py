@@ -173,6 +173,10 @@ class ForgeState(TypedDict, total=False):
     current_task_index: int
     current_task_id: str | None
 
+    # Workspace (set by execute node, read by commit node for scope check)
+    workspace_path: str  # filesystem path to the active workspace
+    allowed_paths: list[str] | None  # task-scoped path whitelist for scope check
+
     # References (not full objects — per design R4)
     digital_twin: str  # reference/handle into twin store
     session_context: str  # reference/handle into session context store
