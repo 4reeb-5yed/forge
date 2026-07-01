@@ -76,6 +76,15 @@ class SessionScheduler:
         self._lock = asyncio.Lock()
         self._session_handlers: dict[str, Any] = {}  # session_id -> handler function
 
+    def update_event_emitter(self, event_emitter: Any) -> None:
+        """Update the event emitter after initialization.
+
+        Args:
+            event_emitter: Event bus publisher function.
+        """
+        self._event_emitter = event_emitter
+        logger.debug("SessionScheduler event emitter updated")
+
     @property
     def max_concurrent(self) -> int:
         """Maximum concurrent sessions allowed."""
@@ -140,6 +149,16 @@ class SessionScheduler:
             session_id, priority, self._queue.qsize()
         )
 
+        # Emit event
+        if self._event_emitter:
+            from app.runtime.events.models import Event, EventType
+            event = Event(
+                type=EventType.SCHEDULER_SESSION_QUEUED,
+                session_id=session_id,
+                data={"priority": priority, "queue_size": self._queue.qsize()},
+            )
+            await self._event_emitter(event)
+
         # Start scheduler if not running
         if self._status == SchedulerStatus.IDLE:
             await self.start()
@@ -153,6 +172,16 @@ class SessionScheduler:
             self._status = SchedulerStatus.RUNNING
             self._scheduler_task = asyncio.create_task(self._run_scheduler())
             logger.info("Session scheduler started (max_concurrent=%d)", self._max_concurrent)
+
+            # Emit event
+            if self._event_emitter:
+                from app.runtime.events.models import Event, EventType
+                event = Event(
+                    type=EventType.SCHEDULER_STARTED,
+                    session_id="system",
+                    data={"max_concurrent": self._max_concurrent},
+                )
+                await self._event_emitter(event)
 
     async def stop(self) -> None:
         """Stop the scheduler and cancel all running sessions."""
@@ -176,17 +205,47 @@ class SessionScheduler:
             self._running.clear()
             logger.info("Session scheduler stopped")
 
+            # Emit event
+            if self._event_emitter:
+                from app.runtime.events.models import Event, EventType
+                event = Event(
+                    type=EventType.SCHEDULER_STOPPED,
+                    session_id="system",
+                    data={"cancelled_sessions": len(self._running)},
+                )
+                await self._event_emitter(event)
+
     async def pause(self) -> None:
         """Pause the scheduler (stops accepting new sessions, keeps running)."""
         async with self._lock:
             self._status = SchedulerStatus.PAUSED
             logger.info("Session scheduler paused")
 
+            # Emit event
+            if self._event_emitter:
+                from app.runtime.events.models import Event, EventType
+                event = Event(
+                    type=EventType.SCHEDULER_PAUSED,
+                    session_id="system",
+                    data={"running_sessions": len(self._running)},
+                )
+                await self._event_emitter(event)
+
     async def resume(self) -> None:
         """Resume the scheduler."""
         async with self._lock:
             self._status = SchedulerStatus.RUNNING
             logger.info("Session scheduler resumed")
+
+            # Emit event
+            if self._event_emitter:
+                from app.runtime.events.models import Event, EventType
+                event = Event(
+                    type=EventType.SCHEDULER_RESUMED,
+                    session_id="system",
+                    data={},
+                )
+                await self._event_emitter(event)
 
     def get_status(self, session_id: str) -> SessionStatus | None:
         """Get the status of a session.
@@ -274,9 +333,21 @@ class SessionScheduler:
             handler: The session execution handler.
         """
         session_id = queued.session_id
+        start_event_emitted = False
 
         try:
             logger.info("Executing session %s", session_id)
+
+            # Emit session started event
+            if self._event_emitter:
+                from app.runtime.events.models import Event, EventType
+                event = Event(
+                    type=EventType.SCHEDULER_SESSION_STARTED,
+                    session_id=session_id,
+                    data={"priority": queued.priority},
+                )
+                await self._event_emitter(event)
+                start_event_emitted = True
 
             # Run the session handler
             result = await handler(queued.session_data)
@@ -284,13 +355,43 @@ class SessionScheduler:
             queued.status = SessionStatus.COMPLETED
             logger.info("Session %s completed successfully", session_id)
 
+            # Emit completion event
+            if self._event_emitter:
+                from app.runtime.events.models import Event, EventType
+                event = Event(
+                    type=EventType.SCHEDULER_SESSION_COMPLETED,
+                    session_id=session_id,
+                    data={"result": str(result)[:100]},  # Truncate result
+                )
+                await self._event_emitter(event)
+
         except asyncio.CancelledError:
             queued.status = SessionStatus.CANCELLED
             logger.info("Session %s cancelled", session_id)
 
+            # Emit cancelled event
+            if self._event_emitter:
+                from app.runtime.events.models import Event, EventType
+                event = Event(
+                    type=EventType.SCHEDULER_SESSION_CANCELLED,
+                    session_id=session_id,
+                    data={},
+                )
+                await self._event_emitter(event)
+
         except Exception as e:
             queued.status = SessionStatus.FAILED
             logger.exception("Session %s failed: %s", session_id, e)
+
+            # Emit failed event
+            if self._event_emitter:
+                from app.runtime.events.models import Event, EventType
+                event = Event(
+                    type=EventType.SCHEDULER_SESSION_FAILED,
+                    session_id=session_id,
+                    data={"error": str(e)[:200]},  # Truncate error
+                )
+                await self._event_emitter(event)
 
         finally:
             # Move from running to completed

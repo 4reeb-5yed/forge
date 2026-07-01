@@ -91,6 +91,19 @@ async def _lifespan(app: FastAPI):
     deps = assemble_deps()
     app.state.deps = deps
 
+    # Wire event emitters to all managers after deps is available
+    approval_manager.update_event_emitter(deps.event_bus.publish)
+    logger.info("Approval manager event emitter wired")
+
+    scheduler = get_scheduler()
+    scheduler.update_event_emitter(deps.event_bus.publish)
+    logger.info("Session scheduler event emitter wired")
+
+    timeout_manager = get_timeout_manager()
+    timeout_manager.update_event_emitter(deps.event_bus.publish)
+    timeout_manager.update_interrupt_handler(deps.interrupt_handler)
+    logger.info("Build timeout manager wired with event emitter and interrupt handler")
+
     # Wire StreamRouter after deps is assembled (needs model_router and event_bus)
     try:
         from app.runtime.stream_router import set_stream_router, StreamRouter

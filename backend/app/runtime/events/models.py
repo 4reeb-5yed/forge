@@ -92,6 +92,19 @@ class EventType(str, Enum):
     INTERRUPT_PAUSED = "interrupt.paused"
     INTERRUPT_RESUMED = "interrupt.resumed"
     INTERRUPT_STOPPED = "interrupt.stopped"
+    # Scheduler events
+    SCHEDULER_STARTED = "scheduler.started"
+    SCHEDULER_STOPPED = "scheduler.stopped"
+    SCHEDULER_PAUSED = "scheduler.paused"
+    SCHEDULER_RESUMED = "scheduler.resumed"
+    SCHEDULER_SESSION_QUEUED = "scheduler.session.queued"
+    SCHEDULER_SESSION_STARTED = "scheduler.session.started"
+    SCHEDULER_SESSION_COMPLETED = "scheduler.session.completed"
+    SCHEDULER_SESSION_FAILED = "scheduler.session.failed"
+    SCHEDULER_SESSION_CANCELLED = "scheduler.session.cancelled"
+    # Learning events
+    LEARNING_ANALYSIS_COMPLETE = "learning.analysis.complete"
+    LEARNING_RECOMMENDATION_GENERATED = "learning.recommendation.generated"
     INTERRUPT_REDIRECTED = "interrupt.redirected"
 
 
