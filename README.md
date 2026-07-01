@@ -216,7 +216,7 @@ Auth: `Authorization: Bearer <FORGE_API_TOKEN>` on all endpoints.
 | `DATABASE_URL` | For Docker | PostgreSQL connection string |
 | `FORGE_API_TOKEN` | Yes | Bearer token for API auth |
 | `FORGE_AUTH_DISABLED` | No | Set `true` to disable auth (development only) |
-| `AIDER_MODEL` | No | Model for Aider subprocess. Direct `AiderTool` defaults to `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`; `SandboxedAiderTool` (the default/recommended adapter) defaults to `claude-sonnet-4-20250514` instead — the two tools have different hardcoded defaults |
+| `AIDER_MODEL` | No | Model for Aider subprocess. Must be an OpenRouter-routed name (`openrouter/<provider>/<model>`) since only `OPENROUTER_API_KEY` ever reaches the coding tool. Direct `AiderTool` defaults to `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`; `SandboxedAiderTool` (the default/recommended adapter) defaults to `openrouter/anthropic/claude-3-haiku` instead — the two tools have different hardcoded defaults |
 | `FORGE_MODEL` | No | AI model for workflow (default: nvidia/nemotron-3-ultra-550b-a55b:free) |
 | `FORGE_USE_SANDBOX` | No | Sandbox mode: `auto` (default), `always`, `never` |
 | `OPENHANDS_API_KEY` | No | OpenHands Cloud API key (if set, uses OpenHands instead of Aider) |
@@ -241,7 +241,7 @@ pytest -k "properties"    # Property-based tests only
 - **Circuit breaker per AI provider** — dead providers ejected in milliseconds
 - **Secrets never persisted in plaintext** — redacted at every serialization boundary, config file uses 0600 permissions
 - **Deterministic intent classification** — "stop" never depends on AI being reachable
-- **Workspace sandboxing** — each task runs in a Docker container with `--network none`, no host access, resource limits, and read-only rootfs. Only `OPENROUTER_API_KEY` and `HOME` reach the sandbox.
+- **Workspace sandboxing** — each task runs in a Docker container with no host access, resource limits, and read-only rootfs. Only `OPENROUTER_API_KEY` and `HOME` reach the sandbox. **Known gap:** the container currently runs with full network egress (`allow_network=True`), not `--network none` — a fully network-isolated container cannot reach OpenRouter at all, so egress is enabled as a functional stopgap until an OpenRouter-only proxy allowlist is implemented. See [Security](./docs/12-SECURITY.md#known-gap-network-egress-is-not-scoped-to-openrouter).
 - **Pre-commit scope check** — AI changes to CI pipelines, secrets, Docker configs, and env files are blocked before commit
 - **Diff audit trail** — every AI-generated change is captured as a git diff and recorded in the audit log
 - **Setup Wizard** — first-run configuration via `/setup` page; no `.env` editing required

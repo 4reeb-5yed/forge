@@ -3,7 +3,7 @@
 Security improvements over the direct-subprocess AiderTool:
 1. Workspace mounted read-write, but nothing else accessible
 2. No access to host env vars (DB credentials, GitHub token, API keys)
-3. Network disabled by default (--network none)
+3. Network disabled by default (--network none) — SEE KNOWN GAP BELOW
 4. Resource limits (memory, CPU, PID)
 5. Non-root user inside container
 6. Read-only root filesystem with writable tmpfs for workspace only
@@ -11,6 +11,25 @@ Security improvements over the direct-subprocess AiderTool:
 8. Only the OPENROUTER_API_KEY is passed (Aider needs it for AI calls)
 
 The existing ToolResult interface is preserved — this is a drop-in replacement.
+
+KNOWN GAP — network isolation vs. functionality (as of this writing):
+`allow_network=False` (the default) sets `--network none`, which blocks ALL
+network access, including to OpenRouter. Since Aider must reach OpenRouter
+to make AI calls, a fully network-isolated sandbox cannot actually execute
+any coding task — it will fail DNS resolution for every host and silently
+produce zero file changes (Aider does not treat this as a hard error, so
+the caller sees a successful-looking exit with no changes committed).
+
+`bootstrap.py` currently works around this by passing `allow_network=True`
+when constructing this tool, which restores functionality but means the
+sandboxed container has full network egress — not scoped to OpenRouter only.
+This weakens the isolation guarantee described above: AI-generated code
+running inside the container could, in principle, reach arbitrary hosts.
+
+The correct fix is network egress scoped to OpenRouter only (e.g. a
+forward-proxy sidecar allowlisting `openrouter.ai` by SNI/hostname, since
+IP-based allowlisting is unreliable behind a CDN). That is tracked as
+follow-up infrastructure work and is not yet implemented.
 """
 
 from __future__ import annotations
@@ -25,7 +44,20 @@ from app.shared import Health, ToolResult
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = 300  # 5 minutes
-DEFAULT_MODEL = "claude-sonnet-4-20250514"
+# NOTE: this must be an OpenRouter-routed model name (openrouter/<provider>/<model>),
+# not a raw provider model name like "claude-sonnet-4-20250514". The sandbox only
+# ever receives OPENROUTER_API_KEY (never ANTHROPIC_API_KEY or any other provider
+# key, by design — see module docstring). A raw Anthropic model name makes Aider
+# try to call Anthropic directly, which then fails with a silent-looking
+# litellm.AuthenticationError ("Missing Anthropic API Key") — Aider still exits 0,
+# so the failure produces zero file changes but is not reported as a tool error.
+#
+# claude-3-haiku is deliberately a low-cost model: pricier OpenRouter models
+# (e.g. anthropic/claude-sonnet-4) can fail with a 402 "requires more credits"
+# error on accounts with limited balance, which — like the auth failure above —
+# is not surfaced as a tool error and silently produces zero file changes.
+# Override via the AIDER_MODEL env var for accounts with more headroom.
+DEFAULT_MODEL = "openrouter/anthropic/claude-3-haiku"
 DEFAULT_IMAGE = "forge-aider-sandbox:latest"
 DEFAULT_MEMORY_LIMIT = "2g"
 DEFAULT_CPU_LIMIT = "2.0"

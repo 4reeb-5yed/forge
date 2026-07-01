@@ -10,6 +10,7 @@ Requirements: 12.1, 12.2, 12.3, 12.4, 12.5
 
 from __future__ import annotations
 
+import uuid
 from typing import Any, Awaitable, Callable
 
 from app.runtime.events.models import Event, EventType
@@ -120,6 +121,8 @@ class SessionBudget:
                         "limit": self._limit,
                         "consumed": self._consumed,
                     },
+                    correlation_id=self._session_id,
+                    event_id=str(uuid.uuid4()),
                 )
                 await self._event_emitter(event)
 

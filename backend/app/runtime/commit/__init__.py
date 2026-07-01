@@ -423,6 +423,8 @@ class CommitWorkflow:
                 "commit_sha": commit_sha,
                 "changed_files": changed_files,
             },
+            correlation_id=self._session_id,
+            event_id=str(uuid.uuid4()),
         )
 
         try:
@@ -451,6 +453,8 @@ class CommitWorkflow:
                 "error": error_msg,
                 "changed_files": request.changed_files,
             },
+            correlation_id=self._session_id,
+            event_id=str(uuid.uuid4()),
         )
 
         try:
@@ -478,6 +482,8 @@ class CommitWorkflow:
                 "changed_files": request.changed_files,
                 "commit_message": request.commit_message,
             },
+            correlation_id=self._session_id,
+            event_id=str(uuid.uuid4()),
         )
 
         try:
@@ -506,6 +512,8 @@ class CommitWorkflow:
                 "action": "commit",
                 "reason": reason,
             },
+            correlation_id=self._session_id,
+            event_id=str(uuid.uuid4()),
         )
 
         try:

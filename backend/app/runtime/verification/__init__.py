@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Awaitable, Callable
@@ -259,6 +260,8 @@ class VerificationPipeline:
                 "status": result.status.value,
                 "detail": result.detail,
             },
+            correlation_id=self._session_id,
+            event_id=str(uuid.uuid4()),
         )
 
         try:
@@ -280,6 +283,8 @@ class VerificationPipeline:
             payload={
                 "task_id": self._task_id,
             },
+            correlation_id=self._session_id,
+            event_id=str(uuid.uuid4()),
         )
 
         try:

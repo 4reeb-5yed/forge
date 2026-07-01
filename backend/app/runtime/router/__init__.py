@@ -16,6 +16,7 @@ import asyncio
 import logging
 import random
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -830,6 +831,8 @@ class ModelRouter:
                 "attempt": attempt,
                 "reason": "success",
             },
+            correlation_id=self._session_id,
+            event_id=str(uuid.uuid4()),
         )
         try:
             await self._event_emitter(event)
@@ -864,6 +867,8 @@ class ModelRouter:
                 "attempt": attempt,
                 "reason": "previous_provider_failed",
             },
+            correlation_id=self._session_id,
+            event_id=str(uuid.uuid4()),
         )
         try:
             await self._event_emitter(event)

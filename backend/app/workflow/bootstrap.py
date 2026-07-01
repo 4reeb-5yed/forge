@@ -197,10 +197,11 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
     # ─── AI Routing: Wire OpenRouter as real call adapter ─────────────
     # If OPENROUTER_API_KEY is set, use the real adapter. Otherwise no-op.
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+    openrouter_provider = None
     if openrouter_key:
         from app.adapters.openrouter import OpenRouterProvider
-        openrouter = OpenRouterProvider(api_key=openrouter_key)
-        call_adapter = openrouter.as_call_adapter()
+        openrouter_provider = OpenRouterProvider(api_key=openrouter_key)
+        call_adapter = openrouter_provider.as_call_adapter()
         logger.info("AI call adapter: OpenRouterProvider (real AI calls enabled)")
     else:
         call_adapter = _noop_call_adapter
@@ -265,9 +266,18 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
     learning_recorder = LearningRecorder(event_emitter=event_bus)
 
     # Health monitoring
+    # probe_map must include a health_check()-capable object for every capability
+    # registered at boot (see Step 4.5 in bootstrap()) — HealthMonitor treats a
+    # missing probe function as an immediate failure and will deregister the
+    # capability after `failure_threshold` consecutive cycles even if the
+    # underlying provider is perfectly healthy.
+    probe_map: dict[Any, Any] = {}
+    if openrouter_provider is not None:
+        probe_map[Capability.AI_CODER] = openrouter_provider
+
     health_monitor = HealthMonitor(
         registry=registry,
-        probe_map={},
+        probe_map=probe_map,
         event_emitter=event_bus.publish,
         config=HealthMonitorConfig(),
         session_id="system",
@@ -344,16 +354,40 @@ def _create_coding_tool():
             )
         from app.adapters.sandboxed_aider import SandboxedAiderTool
         logger.info("Coding tool: SandboxedAiderTool (FORGE_USE_SANDBOX=always)")
+        logger.warning(
+            "⚠️  KNOWN GAP: SandboxedAiderTool is running with allow_network=True "
+            "(full network egress), not scoped to OpenRouter only. --network none "
+            "makes it impossible for Aider inside the sandbox to reach OpenRouter at "
+            "all (DNS resolution fails for every host), so full egress is enabled as "
+            "a functional stopgap. This weakens the sandbox's network-isolation "
+            "guarantee — AI-generated code running inside the container can reach "
+            "arbitrary hosts, not just OpenRouter. A proper fix (e.g. a forward-proxy "
+            "sidecar allowlisting only openrouter.ai by SNI) is tracked as follow-up "
+            "work, not yet implemented."
+        )
         return SandboxedAiderTool(
             openrouter_api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+            allow_network=True,
         )
 
     # auto mode
     if docker_available:
         from app.adapters.sandboxed_aider import SandboxedAiderTool
         logger.info("Coding tool: SandboxedAiderTool (Docker detected)")
+        logger.warning(
+            "⚠️  KNOWN GAP: SandboxedAiderTool is running with allow_network=True "
+            "(full network egress), not scoped to OpenRouter only. --network none "
+            "makes it impossible for Aider inside the sandbox to reach OpenRouter at "
+            "all (DNS resolution fails for every host), so full egress is enabled as "
+            "a functional stopgap. This weakens the sandbox's network-isolation "
+            "guarantee — AI-generated code running inside the container can reach "
+            "arbitrary hosts, not just OpenRouter. A proper fix (e.g. a forward-proxy "
+            "sidecar allowlisting only openrouter.ai by SNI) is tracked as follow-up "
+            "work, not yet implemented."
+        )
         return SandboxedAiderTool(
             openrouter_api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+            allow_network=True,
         )
 
     # Fallback: Docker not available — this is a security gap, make it loud

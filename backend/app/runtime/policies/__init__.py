@@ -10,6 +10,7 @@ Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Awaitable, Callable
@@ -413,6 +414,8 @@ class PolicyEngine:
             session_id=self._session_id,
             source="policy_engine",
             payload=payload,
+            correlation_id=self._session_id,
+            event_id=str(uuid.uuid4()),
         )
 
         try:
@@ -440,6 +443,8 @@ class PolicyEngine:
                 "reason": result.reason,
                 "policy_decision": result.decision.value,
             },
+            correlation_id=self._session_id,
+            event_id=str(uuid.uuid4()),
         )
 
         try:

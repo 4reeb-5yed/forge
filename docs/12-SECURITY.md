@@ -7,7 +7,7 @@ Forge executes AI-generated code autonomously. This document covers the security
 | Threat | Vector | Mitigation |
 |--------|--------|------------|
 | AI writes destructive commands | LLM hallucination or prompt injection | Docker sandbox (no host access), scope check blocks sensitive paths |
-| Credential exfiltration | Code reads env vars and sends them to external server | Network disabled (`--network none`), only `OPENROUTER_API_KEY` passed |
+| Credential exfiltration | Code reads env vars and sends them to external server | Only `OPENROUTER_API_KEY` passed to the sandbox — **but see the network-egress known gap below, which currently means the container is NOT network-isolated** |
 | Lateral movement | Code writes outside workspace | Read-only root filesystem, workspace is the only writable mount |
 | Resource exhaustion | Infinite loops, fork bombs | Memory limit (2G), CPU limit (2.0), PID limit (256), timeout (5 min) |
 | Privilege escalation | Code exploits container runtime | `--cap-drop ALL`, `--security-opt no-new-privileges`, non-root user (uid 1000) |
@@ -47,7 +47,7 @@ Every coding task runs in an ephemeral Docker container with maximum restriction
 
 | Security Control | Docker Flag | Purpose |
 |-----------------|-------------|---------|
-| Network isolation | `--network none` | No outbound connections — prevents data exfiltration |
+| Network isolation | `--network none` when `allow_network=False` | No outbound connections — prevents data exfiltration. **Currently NOT the active configuration — see the known gap below.** |
 | Non-root user | `--user 1000:1000` | Limits filesystem operations |
 | Read-only rootfs | `--read-only` | Only `/workspace` and `/tmp` are writable |
 | Capability drop | `--cap-drop ALL` | No special kernel capabilities |
@@ -58,6 +58,20 @@ Every coding task runs in an ephemeral Docker container with maximum restriction
 | Auto-remove | `--rm` | Container destroyed on exit |
 | Timeout backstop | `--stop-timeout` + asyncio | Killed after 5 minutes |
 | Minimal writable tmpfs | `--tmpfs /tmp:rw,noexec,nosuid,size=512m` | Temp files allowed but not executable |
+
+### Known Gap: Network Egress Is Not Scoped to OpenRouter
+
+`SandboxedAiderTool` defaults to `allow_network=False`, which sets `--network none` on the container. In practice this makes the sandbox **unable to reach OpenRouter at all** — DNS resolution fails for every host, including `openrouter.ai` — so Aider cannot make any AI calls and every sandboxed task silently produces zero file changes (Aider does not treat this as a fatal error, so it exits 0 with no error surfaced to Forge).
+
+As a functional stopgap, `bootstrap.py`'s `_create_coding_tool()` currently constructs `SandboxedAiderTool` with **`allow_network=True`**, restoring the ability to reach OpenRouter but granting the container full network egress — not scoped to OpenRouter only. This means AI-generated code running inside the sandbox can, in principle, reach arbitrary external hosts, which is a real reduction of the isolation guarantee described in this document.
+
+**What this means in practice today:**
+- ✅ Still true: no host filesystem access beyond the workspace, read-only rootfs, no host credentials beyond `OPENROUTER_API_KEY`, resource limits, non-root execution, capability drop.
+- ❌ NOT true today: "no outbound connections" / "prevents data exfiltration" via network isolation. The sandbox has full outbound network access.
+
+**The correct fix** — not yet implemented — is network egress scoped to OpenRouter only: e.g. a forward-proxy sidecar container (such as Squid, configured to allow `CONNECT` only to `openrouter.ai:443` via SNI/hostname filtering, since IP-based allowlisting is unreliable behind a CDN) sitting between the sandbox and the internet, with the sandbox container itself joining only an internal, no-internet network. This preserves the original security intent without breaking functionality. Until this is implemented, treat the sandbox's network isolation property as **not enforced**, and rely on the other layers (read-only rootfs, workspace-only mount, no host credentials, scope check, diff audit logging) as the actual defense in depth.
+
+A `logger.warning(...)` fires at startup whenever `SandboxedAiderTool` is constructed, explicitly calling out this gap — check application logs for "KNOWN GAP" if you need to confirm which mode is active in a given deployment.
 
 ### Secret Isolation
 
@@ -194,6 +208,7 @@ The audit section appears in the output as:
 - [ ] Rotate `OPENROUTER_API_KEY` periodically (it's the only secret exposed to AI)
 - [ ] Monitor audit trail for `commit_blocked` events (indicates AI attempted sensitive modifications)
 - [ ] Monitor WARNING logs for "falling back to UNSANDBOXED" (should never appear in production)
+- [ ] Be aware that the sandbox currently runs with full network egress (see [Known Gap](#known-gap-network-egress-is-not-scoped-to-openrouter)) — do not rely on network isolation as a defense until the OpenRouter-only proxy allowlist is implemented
 - [ ] Set `FORGE_API_TOKEN` to a strong random value
 - [ ] Never expose PostgreSQL port (5432) externally
 - [ ] Use TLS termination in front of the API
@@ -204,7 +219,7 @@ The audit section appears in the output as:
 | Aspect | AiderTool (unsandboxed) | SandboxedAiderTool |
 |--------|------------------------|-------------------|
 | Host filesystem | Full access (same as backend process) | Only `/workspace` mount |
-| Network | Full access | `--network none` |
+| Network | Full access | Full access (`allow_network=True` stopgap — see [Known Gap](#known-gap-network-egress-is-not-scoped-to-openrouter); intended design is `--network none`) |
 | Credentials | All host env vars accessible | Only `OPENROUTER_API_KEY` + `HOME` |
 | Resource limits | None (inherits process limits) | Memory, CPU, PID hard caps |
 | User privileges | Same as backend process | uid 1000, no capabilities |
