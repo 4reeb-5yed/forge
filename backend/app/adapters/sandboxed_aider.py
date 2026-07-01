@@ -215,7 +215,7 @@ class SandboxedAiderTool:
             # Security: writable tmpfs for temp files only
             "--tmpfs", "/tmp:rw,noexec,nosuid,size=512m",
             # Aider needs a writable home directory for its cache
-            "--tmpfs", "/home/sandbox:rw,noexec,nosuid,size=256m",
+            "--tmpfs", "/home/sandbox:rw,noexec,nosuid,size=256m,uid=1000,gid=1000",
             # Security: drop all capabilities, add none back
             "--cap-drop", "ALL",
             # Security: no new privileges
@@ -235,6 +235,8 @@ class SandboxedAiderTool:
         # No GitHub token, no DB credentials, no other secrets
         if self._openrouter_api_key:
             cmd.extend(["-e", f"OPENROUTER_API_KEY={self._openrouter_api_key}"])
+        # Set HOME explicitly for Aider's cache directory
+        cmd.extend(["-e", "HOME=/home/sandbox"])
 
         # The image and command
         cmd.extend([
