@@ -21,6 +21,7 @@ Comprehensive documentation lives in [`docs/`](./docs/README.md):
 | [Testing](./docs/09-TESTING.md) | Test strategy, property-based testing |
 | [Future](./docs/10-FUTURE.md) | Roadmap, limitations, tradeoffs |
 | [Security](./docs/12-SECURITY.md) | Workspace sandboxing, scope checks, secret isolation |
+| [File Structure](./docs/11-FILE-STRUCTURE.md) | Complete project file tree |
 
 ## What It Does
 
@@ -165,6 +166,7 @@ Each node delegates to an existing runtime component. Conditional routing handle
 | GitHub VCS | github.com | Clone, commit, push (token auth) |
 | Aider | aider CLI | Coding tool (subprocess with timeout) |
 | Sandboxed Aider | Docker + aider | Coding tool in isolated container (recommended) |
+| OpenHands | all-hands.dev | Cloud coding agent (alternative to Aider, requires API key) |
 
 ## API
 
@@ -214,9 +216,10 @@ Auth: `Authorization: Bearer <FORGE_API_TOKEN>` on all endpoints.
 | `DATABASE_URL` | For Docker | PostgreSQL connection string |
 | `FORGE_API_TOKEN` | Yes | Bearer token for API auth |
 | `FORGE_AUTH_DISABLED` | No | Set `true` to disable auth (development only) |
-| `AIDER_MODEL` | No | Model for Aider subprocess (default: claude-sonnet-4-20250514) |
+| `AIDER_MODEL` | No | Model for Aider subprocess (default: openrouter/nvidia/nemotron-3-ultra-550b-a55b:free) |
 | `FORGE_MODEL` | No | AI model for workflow (default: nvidia/nemotron-3-ultra-550b-a55b:free) |
 | `FORGE_USE_SANDBOX` | No | Sandbox mode: `auto` (default), `always`, `never` |
+| `OPENHANDS_API_KEY` | No | OpenHands Cloud API key (if set, uses OpenHands instead of Aider) |
 | `NEXT_PUBLIC_WS_URL` | No | WebSocket backend URL for frontend (default: `ws://localhost:8000`) |
 
 ## Testing
