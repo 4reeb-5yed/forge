@@ -262,6 +262,10 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
     # VCS operations (clone/push) use GitHubVCS adapter on a separate path.
     coding_tool = _create_coding_tool()
 
+    # VCS connector — GitHubVCS for clone/commit/push operations
+    from app.adapters.github_vcs import GitHubVCS
+    vcs = GitHubVCS(token=os.environ.get("GITHUB_TOKEN", ""))
+
     # Inspection & control
     inspector = RuntimeInspector(
         audit_trail=audit_trail,
@@ -304,6 +308,7 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
         model_router=model_router,
         workspace_manager=workspace_manager,
         coding_tool=coding_tool,
+        vcs=vcs,
         inspector=inspector,
         interrupt_handler=interrupt_handler,
         mode_evaluator=mode_evaluator,

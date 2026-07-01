@@ -161,6 +161,7 @@ class ForgeState(TypedDict, total=False):
     session_id: str
     status: str
     build_mode: Literal["new", "extend", "analyze", "document"]
+    repo_url: str  # Target repository URL for clone/push operations
 
     # Workflow routing
     intent: str  # classified intent: "build_intent", "status_query", "interrupt", "natural_language"

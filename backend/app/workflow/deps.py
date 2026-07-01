@@ -124,6 +124,9 @@ class RuntimeDeps:
     # Coding tool (SandboxedAiderTool or AiderTool, wired during bootstrap)
     coding_tool: Any = None
 
+    # VCS connector (GitHubVCS, wired during bootstrap)
+    vcs: Any = None
+
     # ConfigService (wired during bootstrap)
     config_service: Any = None
 

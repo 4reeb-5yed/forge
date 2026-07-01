@@ -31,6 +31,7 @@ class InvokeRequest(BaseModel):
     message: str
     session_id: str = "default"
     build_mode: str = "new"
+    repo_url: str = ""  # Target repository URL for clone/push
 
 
 class InvokeResponse(BaseModel):
@@ -178,6 +179,7 @@ def create_app() -> FastAPI:
             "session_id": request.session_id,
             "message": request.message,
             "build_mode": request.build_mode,  # type: ignore[typeddict-item]
+            "repo_url": request.repo_url,
             "status": "received",
             "tasks": [],
             "errors": [],

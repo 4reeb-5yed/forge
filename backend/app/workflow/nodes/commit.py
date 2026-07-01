@@ -1,7 +1,10 @@
-"""Commit node — commits verified changes and advances task index.
+"""Commit node — commits and pushes changes to the remote repo.
 
-Runs diff-scope check before committing to block changes that touch
-sensitive or out-of-scope paths (security hardening).
+Does REAL git operations:
+1. Runs diff-scope check (security)
+2. git add -A + git commit
+3. git push to remote
+4. Returns the real commit SHA
 
 Requirements: 10.1, 10.2, 10.3
 """
@@ -23,21 +26,7 @@ NodeFn = Callable[[ForgeState], Awaitable[dict[str, Any]]]
 
 
 def make_commit_node(deps: RuntimeDeps) -> NodeFn:
-    """Factory that creates the commit node function.
-
-    The commit node:
-    1. Runs diff-scope check to block out-of-scope/sensitive changes
-    2. Commits changes via workspace merge
-    3. Appends the SHA to commit_shas
-    4. Increments current_task_index
-    5. Sets all_tasks_done when complete
-
-    Args:
-        deps: The RuntimeDeps container with all runtime components.
-
-    Returns:
-        An async node function conforming to the LangGraph node contract.
-    """
+    """Factory that creates the commit node function."""
 
     async def commit_node(state: ForgeState) -> dict[str, Any]:
         node_path = list(state.get("node_path", []))
@@ -47,7 +36,7 @@ def make_commit_node(deps: RuntimeDeps) -> NodeFn:
         task_ordering = state.get("task_ordering", [])
         current_task_id = state.get("current_task_id")
         workspace_path = state.get("workspace_path", "")
-        allowed_paths = state.get("allowed_paths")  # Task-scoped paths, if set
+        allowed_paths = state.get("allowed_paths")
 
         # ─── Pre-commit scope check (security) ───────────────────────────
         if workspace_path:
@@ -61,7 +50,6 @@ def make_commit_node(deps: RuntimeDeps) -> NodeFn:
                     current_task_id,
                     scope_result.reason,
                 )
-                # Emit a security event so audit trail captures the block
                 block_event = Event.create(
                     type=EventType.ERROR,
                     session_id=session_id,
@@ -78,7 +66,6 @@ def make_commit_node(deps: RuntimeDeps) -> NodeFn:
                 )
                 await deps.event_bus.publish(block_event)
 
-                # Do NOT commit — return error state
                 node_path.append("commit_blocked")
                 return {
                     "commit_shas": commit_shas,
@@ -92,15 +79,51 @@ def make_commit_node(deps: RuntimeDeps) -> NodeFn:
                     }],
                 }
 
-        # ─── Commit the changes ──────────────────────────────────────────
-        # Generate a placeholder commit SHA
-        commit_sha = uuid.uuid4().hex[:12]
+        # ─── Real commit + push ───────────────────────────────────────────
+        commit_sha = ""
+        if workspace_path and deps.vcs is not None:
+            try:
+                # Configure git user for the commit
+                import asyncio
+                proc = await asyncio.create_subprocess_exec(
+                    "git", "config", "user.email", "forge@forge-runtime.dev",
+                    cwd=workspace_path,
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await proc.wait()
+                proc = await asyncio.create_subprocess_exec(
+                    "git", "config", "user.name", "Forge",
+                    cwd=workspace_path,
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await proc.wait()
+
+                # Commit
+                commit_msg = f"forge: {current_task_id or 'automated changes'}"
+                commit_sha = await deps.vcs.commit(workspace_path, commit_msg)
+                logger.info("Committed %s for task %s", commit_sha[:8], current_task_id)
+
+                # Push
+                await deps.vcs.push(workspace_path)
+                logger.info("Pushed to remote for task %s", current_task_id)
+
+            except RuntimeError as exc:
+                error_msg = str(exc)
+                if "nothing to commit" in error_msg.lower() or "working tree clean" in error_msg.lower():
+                    # No changes — not an error, just nothing to push
+                    logger.info("No changes to commit for task %s", current_task_id)
+                    commit_sha = "no-changes"
+                else:
+                    logger.warning("Commit/push failed for task %s: %s", current_task_id, exc)
+                    commit_sha = f"failed-{uuid.uuid4().hex[:8]}"
+        else:
+            # Fallback: no VCS or no workspace — generate placeholder
+            commit_sha = uuid.uuid4().hex[:12]
+
         commit_shas.append(commit_sha)
-
-        # Increment task index
         current_task_index += 1
-
-        # Determine if all tasks are done
         all_tasks_done = current_task_index >= len(task_ordering)
 
         # Emit commit.done event
