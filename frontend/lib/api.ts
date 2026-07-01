@@ -70,6 +70,39 @@ export interface SessionEvent {
   event_id: string;
 }
 
+export interface TokenEvent {
+  schema_version: string;
+  seq: number;
+  session_id: string;
+  type: "token";
+  timestamp: string;
+  source: string;
+  payload: {
+    token: string;
+    timestamp: string;
+  };
+  event_id: string;
+}
+
+export interface ApprovalEvent {
+  schema_version: string;
+  seq: number;
+  session_id: string;
+  type: "approval.requested" | "approval.approved" | "approval.rejected";
+  timestamp: string;
+  source: string;
+  payload: {
+    request_id: string;
+    task_id: string | null;
+    approval_type: string;
+    diff_summary: string;
+    changed_files: string[];
+    reviewer?: string;
+    comment?: string;
+  };
+  event_id: string;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

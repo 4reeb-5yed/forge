@@ -197,6 +197,11 @@ def create_app() -> FastAPI:
 
     app.include_router(approval_router)
 
+    # Mount the recovery API router
+    from app.api.recovery import recovery_router
+
+    app.include_router(recovery_router)
+
     @app.post("/workflow/invoke", response_model=InvokeResponse)
     async def invoke_workflow(request: InvokeRequest) -> InvokeResponse:
         """Invoke the Forge workflow with a user message.
