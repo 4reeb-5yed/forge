@@ -202,7 +202,7 @@ The direct `AiderTool` runs with the same privileges as the Forge backend proces
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `FORGE_USE_SANDBOX` | `auto` | `auto` / `always` / `never` — controls which tool is used |
+| `FORGE_USE_SANDBOX` | `always` | `always` / `auto` / `never` — controls which tool is used |
 | `AIDER_MODEL` | `claude-sonnet-4-20250514` | Model for Aider |
 | Timeout | 300s | Container killed on timeout |
 | Image | `forge-aider-sandbox:latest` | Docker image to use |
