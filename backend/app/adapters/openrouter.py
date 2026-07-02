@@ -86,6 +86,8 @@ class OpenRouterProvider:
         if "max_tokens" not in payload:
             payload["max_tokens"] = 4096
 
+        logger.info("OpenRouter request: model=%s, message_count=%d", model, len(messages))
+
         response = await client.post(
             f"{BASE_URL}/chat/completions",
             headers=self._headers(),

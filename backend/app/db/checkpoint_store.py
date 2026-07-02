@@ -2,10 +2,42 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Any
 
 import asyncpg
+
+logger = logging.getLogger(__name__)
+
+
+def _coerce_session_uuid(session_id: str) -> uuid.UUID | None:
+    """Coerce a session_id into a UUID for the `checkpoints.session_id` FK column.
+
+    `checkpoints.session_id` is a foreign key into `sessions.id` (a UUID column).
+    Callers of this module — notably `/workflow/invoke` — accept an arbitrary,
+    client-supplied `session_id` string (e.g. "demo-1", "e2e-sandbox-final") with
+    no corresponding `sessions` row ever created. Passing such a string straight
+    to `uuid.UUID(...)` raises `ValueError: badly formed hexadecimal UUID string`,
+    and even a real UUID would still fail with a foreign-key violation if no
+    matching `sessions` row exists.
+
+    Returns the parsed UUID if `session_id` is a valid UUID string, or `None` if
+    it isn't. Callers should treat `None` as "skip the checkpoint write/read for
+    this session" rather than raising, since this is expected for any session
+    that predates the PostgreSQL-backed session store being wired into the actual
+    request path.
+    """
+    try:
+        return uuid.UUID(session_id) if isinstance(session_id, str) else session_id
+    except (ValueError, AttributeError, TypeError):
+        logger.warning(
+            "session_id %r is not a valid UUID — checkpoint store requires a "
+            "sessions.id foreign key match. Skipping checkpoint operation for "
+            "this session instead of raising.",
+            session_id,
+        )
+        return None
 
 
 async def write_checkpoint(
@@ -15,14 +47,22 @@ async def write_checkpoint(
     highest_seq: int,
     state_json: dict[str, Any] | None = None,
 ) -> None:
-    """Write a checkpoint for a session at the given node and sequence."""
+    """Write a checkpoint for a session at the given node and sequence.
+
+    No-ops (logs a warning, does not raise) if `session_id` is not a valid UUID —
+    see `_coerce_session_uuid`.
+    """
+    session_uuid = _coerce_session_uuid(session_id)
+    if session_uuid is None:
+        return
+
     async with pool.acquire() as conn:
         await conn.execute(
             """
             INSERT INTO checkpoints (session_id, node_id, highest_seq, state_json)
             VALUES ($1, $2, $3, $4)
             """,
-            uuid.UUID(session_id) if isinstance(session_id, str) else session_id,
+            session_uuid,
             node_id,
             highest_seq,
             state_json,
@@ -32,7 +72,14 @@ async def write_checkpoint(
 async def get_latest_checkpoint(
     pool: asyncpg.Pool, session_id: str
 ) -> dict[str, Any] | None:
-    """Get the most recent checkpoint for a session (by highest_seq desc)."""
+    """Get the most recent checkpoint for a session (by highest_seq desc).
+
+    Returns `None` if `session_id` is not a valid UUID — see `_coerce_session_uuid`.
+    """
+    session_uuid = _coerce_session_uuid(session_id)
+    if session_uuid is None:
+        return None
+
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
@@ -41,7 +88,7 @@ async def get_latest_checkpoint(
             ORDER BY highest_seq DESC
             LIMIT 1
             """,
-            uuid.UUID(session_id) if isinstance(session_id, str) else session_id,
+            session_uuid,
         )
 
     return dict(row) if row else None

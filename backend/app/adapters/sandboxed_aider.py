@@ -182,6 +182,19 @@ class SandboxedAiderTool:
             stderr = stderr_bytes.decode("utf-8", errors="replace")
             success = proc.returncode == 0
 
+            # Log Aider's real output unconditionally — this was previously only
+            # surfaced via the returned ToolResult, which execute_node discards on
+            # the success path, leaving no record of what Aider actually did.
+            logger.info(
+                "Sandboxed Aider finished (exit=%d, success=%s) for %s\n"
+                "--- STDOUT ---\n%s\n--- STDERR ---\n%s",
+                proc.returncode,
+                success,
+                workspace_path,
+                stdout,
+                stderr,
+            )
+
             if not success:
                 logger.warning(
                     "Sandboxed Aider exited with code %d for task in %s",
