@@ -86,7 +86,8 @@ export default function ChatMessage({ message }: ChatMessageProps) {
               <div className="mt-2">
                 {message.response.errors.map((err, i) => (
                   <div key={i} className="text-xs text-forge-error font-mono">
-                    {err}
+                    {err.code && <span className="font-bold">[{err.code}] </span>}
+                    {err.message || JSON.stringify(err)}
                   </div>
                 ))}
               </div>
