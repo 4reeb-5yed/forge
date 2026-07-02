@@ -89,16 +89,27 @@ def make_commit_node(deps: RuntimeDeps) -> NodeFn:
                     "git", "config", "user.email", "forge@forge-runtime.dev",
                     cwd=workspace_path,
                     stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.PIPE,
                 )
-                await proc.wait()
+                _, stderr = await proc.communicate()
+                if proc.returncode != 0:
+                    logger.warning(
+                        "Failed to set git user.email for task %s: %s",
+                        current_task_id, stderr.decode("utf-8", errors="replace").strip()
+                    )
+
                 proc = await asyncio.create_subprocess_exec(
                     "git", "config", "user.name", "Forge",
                     cwd=workspace_path,
                     stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.PIPE,
                 )
-                await proc.wait()
+                _, stderr = await proc.communicate()
+                if proc.returncode != 0:
+                    logger.warning(
+                        "Failed to set git user.name for task %s: %s",
+                        current_task_id, stderr.decode("utf-8", errors="replace").strip()
+                    )
 
                 # Commit
                 commit_msg = f"forge: {current_task_id or 'automated changes'}"
@@ -116,7 +127,10 @@ def make_commit_node(deps: RuntimeDeps) -> NodeFn:
                     logger.info("No changes to commit for task %s", current_task_id)
                     commit_sha = "no-changes"
                 else:
-                    logger.warning("Commit/push failed for task %s: %s", current_task_id, exc)
+                    logger.warning(
+                        "Commit/push failed for task %s: %s (error_msg='%s')",
+                        current_task_id, type(exc).__name__, error_msg
+                    )
                     commit_sha = f"failed-{uuid.uuid4().hex[:8]}"
         else:
             # Fallback: no VCS or no workspace — generate placeholder

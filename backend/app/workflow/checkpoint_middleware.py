@@ -7,6 +7,7 @@ enabling crash recovery and resume functionality.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from typing import Any, Callable, Awaitable
@@ -116,12 +117,15 @@ class CheckpointMiddleware:
             # Create redacted state for storage (exclude sensitive data)
             redacted_state = self._redact_state(state)
 
+            # Serialize state to JSON string for asyncpg compatibility
+            state_json = json.dumps(redacted_state)
+
             # Write checkpoint
             await self._store.write_checkpoint(
                 session_id=session_id,
                 node_id=node_id,
                 highest_seq=highest_seq,
-                state_json=redacted_state,
+                state_json=state_json,
             )
 
             # Update last checkpoint time

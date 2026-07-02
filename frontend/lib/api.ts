@@ -107,9 +107,22 @@ export interface ApprovalEvent {
 // Helpers
 // ---------------------------------------------------------------------------
 
+function getApiToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("forge_api_token");
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  
+  // Add auth token if available
+  const token = getApiToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers,
     ...options,
   });
   if (!res.ok) {
@@ -275,14 +288,20 @@ export function connectEventStream(
     typeof window !== "undefined" && process.env.NEXT_PUBLIC_WS_URL
       ? process.env.NEXT_PUBLIC_WS_URL
       : "ws://localhost:8000";
-  const wsUrl = `${backendHost}/sessions/${sessionId}/events`;
+  
+  // Build WebSocket URL with optional token query param
+  let wsUrl = `${backendHost}/sessions/${sessionId}/events`;
+  const token = getApiToken();
+  if (token) {
+    wsUrl += `?token=${encodeURIComponent(token)}`;
+  }
 
   let lastSeq = 0;
   let retryCount = 0;
   const maxBackoff = 30000;
 
   function connect(): WebSocket {
-    const url = lastSeq > 0 ? `${wsUrl}?since_seq=${lastSeq}` : wsUrl;
+    const url = lastSeq > 0 ? `${wsUrl}&since_seq=${lastSeq}` : wsUrl;
     const ws = new WebSocket(url);
 
     ws.onmessage = (msg) => {

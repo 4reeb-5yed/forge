@@ -31,6 +31,19 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 
 
 # ---------------------------------------------------------------------------
+# Helpers for getting request context
+# ---------------------------------------------------------------------------
+
+async def _get_request_opt(request: Request) -> Request | None:
+    """Dependency that provides the current request object.
+    
+    Returns the Request if available, None otherwise.
+    This is used to check the request path for health endpoint bypass.
+    """
+    return request
+
+
+# ---------------------------------------------------------------------------
 # Auth error response model
 # ---------------------------------------------------------------------------
 
@@ -49,15 +62,23 @@ async def require_auth(
     credentials: Annotated[
         HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)
     ],
+    request: Request | None = Depends(_get_request_opt),
 ) -> str:
     """FastAPI dependency that validates Bearer token on REST endpoints.
 
     Returns the validated token string on success.
     Raises HTTPException 401 with a JSON error body on failure.
     The operation is never reached if this dependency raises.
+
+    Note: /health endpoint bypasses auth regardless of this dependency,
+    since health checks must work without credentials.
     """
     if _AUTH_DISABLED:
         return "auth-disabled"
+
+    # Allow unauthenticated access to health check endpoint
+    if request is not None and request.url.path == "/health":
+        return "health-bypass"
 
     if credentials is None:
         raise HTTPException(

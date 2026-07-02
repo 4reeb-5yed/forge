@@ -45,7 +45,7 @@ async def write_checkpoint(
     session_id: str,
     node_id: str,
     highest_seq: int,
-    state_json: dict[str, Any] | None = None,
+    state_json: str | None = None,
 ) -> None:
     """Write a checkpoint for a session at the given node and sequence.
 
