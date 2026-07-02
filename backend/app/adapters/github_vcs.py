@@ -17,6 +17,15 @@ from app.shared import Health
 logger = logging.getLogger(__name__)
 
 
+class NothingToCommitError(RuntimeError):
+    """Raised when git commit is attempted with no changes to commit.
+
+    This is an expected, non-error condition that indicates the working tree
+    is clean (no changes to stage and commit).
+    """
+    pass
+
+
 class GitHubVCS:
     """GitHub VCS connector using asyncio subprocess for git operations.
 
@@ -24,6 +33,7 @@ class GitHubVCS:
     """
 
     name: str = "github"
+    nothing_to_commit_error_type = NothingToCommitError
 
     def __init__(self, *, token: str | None = None) -> None:
         self._token = token or os.environ.get("GITHUB_TOKEN", "")
@@ -100,19 +110,27 @@ class GitHubVCS:
             The commit SHA.
 
         Raises:
-            RuntimeError: If git add or git commit fails.
+            RuntimeError: If git add or git commit fails (except "nothing to commit").
         """
         # Stage all changes
         rc, _, stderr = await self._run_git("add", "-A", cwd=workspace_path)
         if rc != 0:
             raise RuntimeError(f"git add failed: {stderr}")
 
-        # Commit
-        rc, _, stderr = await self._run_git(
+        # Commit - capture both stdout and stderr
+        rc, stdout, stderr = await self._run_git(
             "commit", "-m", message, cwd=workspace_path
         )
         if rc != 0:
-            raise RuntimeError(f"git commit failed: {stderr}")
+            # git commit outputs "nothing to commit" to stdout, not stderr
+            combined_output = f"{stdout}\n{stderr}".strip()
+            if "nothing to commit" in combined_output.lower() or "working tree clean" in combined_output.lower():
+                # This is an expected condition - no changes to commit
+                raise NothingToCommitError(f"nothing to commit: {combined_output}")
+            # Genuine failure - include both stdout and stderr
+            raise RuntimeError(
+                f"git commit failed (exit {rc}): stdout={stdout!r} stderr={stderr!r}"
+            )
 
         # Get commit SHA
         rc, stdout, stderr = await self._run_git(

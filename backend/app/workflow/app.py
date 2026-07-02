@@ -300,12 +300,13 @@ def create_app() -> FastAPI:
             node_path=final_state.get("node_path", []),
         )
 
-    @app.get("/health", dependencies=[])
+    @app.get("/health")
     async def health_check() -> dict[str, Any]:
-        """Enhanced health check endpoint — no authentication required.
+        """Enhanced health check endpoint — authentication bypassed.
 
-        Returns per-component health status, overall aggregated status,
-        and configured boolean. Suitable for container orchestrator probes.
+        Authentication is bypassed via require_auth dependency checking for
+        /health path. Returns per-component health status, overall aggregated
+        status, and configured boolean. Suitable for container orchestrator probes.
         """
         import app.api as api_module
 

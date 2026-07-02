@@ -89,16 +89,27 @@ def make_commit_node(deps: RuntimeDeps) -> NodeFn:
                     "git", "config", "user.email", "forge@forge-runtime.dev",
                     cwd=workspace_path,
                     stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.PIPE,
                 )
-                await proc.wait()
+                _, stderr = await proc.communicate()
+                if proc.returncode != 0:
+                    logger.warning(
+                        "Failed to set git user.email for task %s: %s",
+                        current_task_id, stderr.decode("utf-8", errors="replace").strip()
+                    )
+
                 proc = await asyncio.create_subprocess_exec(
                     "git", "config", "user.name", "Forge",
                     cwd=workspace_path,
                     stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.PIPE,
                 )
-                await proc.wait()
+                _, stderr = await proc.communicate()
+                if proc.returncode != 0:
+                    logger.warning(
+                        "Failed to set git user.name for task %s: %s",
+                        current_task_id, stderr.decode("utf-8", errors="replace").strip()
+                    )
 
                 # Commit
                 commit_msg = f"forge: {current_task_id or 'automated changes'}"
@@ -109,15 +120,17 @@ def make_commit_node(deps: RuntimeDeps) -> NodeFn:
                 await deps.vcs.push(workspace_path)
                 logger.info("Pushed to remote for task %s", current_task_id)
 
+            except deps.vcs.nothing_to_commit_error_type as exc:
+                # No changes — not an error, just nothing to push
+                logger.info("No changes to commit for task %s", current_task_id)
+                commit_sha = "no-changes"
             except RuntimeError as exc:
                 error_msg = str(exc)
-                if "nothing to commit" in error_msg.lower() or "working tree clean" in error_msg.lower():
-                    # No changes — not an error, just nothing to push
-                    logger.info("No changes to commit for task %s", current_task_id)
-                    commit_sha = "no-changes"
-                else:
-                    logger.warning("Commit/push failed for task %s: %s", current_task_id, exc)
-                    commit_sha = f"failed-{uuid.uuid4().hex[:8]}"
+                logger.warning(
+                    "Commit/push failed for task %s: %s (error_msg='%s')",
+                    current_task_id, type(exc).__name__, error_msg
+                )
+                commit_sha = f"failed-{uuid.uuid4().hex[:8]}"
         else:
             # Fallback: no VCS or no workspace — generate placeholder
             commit_sha = uuid.uuid4().hex[:12]

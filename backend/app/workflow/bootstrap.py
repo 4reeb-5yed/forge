@@ -255,7 +255,10 @@ def assemble_deps(config_dir: str = "config") -> RuntimeDeps:
     )
 
     # Workspace management
-    workspace_manager = WorkspaceManager(event_bus=event_bus)
+    workspace_manager = WorkspaceManager(
+        event_bus=event_bus,
+        base_dir=os.environ.get("WORKSPACE_BASE_DIR", "/tmp/forge-workspaces"),
+    )
 
     # Coding tool — prefer sandboxed version when Docker is available
     # NOTE: GITHUB_TOKEN is intentionally NOT passed to the coding tool.
@@ -359,12 +362,15 @@ class _InMemoryCheckpointStore:
         self._checkpoints: dict[str, Any] = {}
 
     async def write_checkpoint(
-        self, session_id: str, node_id: str, highest_seq: int, state_json: dict | None = None
+        self, session_id: str, node_id: str, highest_seq: int, state_json: str | None = None
     ) -> None:
+        # state_json is a JSON string - parse it for storage
+        import json
+        state = json.loads(state_json) if state_json else None
         self._checkpoints[session_id] = {
             "node_id": node_id,
             "highest_seq": highest_seq,
-            "state": state_json,
+            "state": state,
         }
 
     async def get_latest_checkpoint(self, session_id: str):

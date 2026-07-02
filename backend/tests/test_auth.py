@@ -9,7 +9,7 @@ Requirements: 26.5, 26.6
 from __future__ import annotations
 
 import pytest
-from fastapi import FastAPI, WebSocket, status
+from fastapi import Depends, FastAPI, Request, WebSocket, status
 from fastapi.testclient import TestClient
 
 from app.api.auth import (
@@ -45,11 +45,11 @@ def app() -> FastAPI:
     app = FastAPI()
 
     @app.get("/protected")
-    async def protected_endpoint(token: str = pytest.importorskip("fastapi").Depends(require_auth)):
+    async def protected_endpoint(token: str = Depends(require_auth)):
         return {"message": "success", "token_used": token}
 
     @app.post("/action")
-    async def action_endpoint(token: str = pytest.importorskip("fastapi").Depends(require_auth)):
+    async def action_endpoint(token: str = Depends(require_auth)):
         return {"action": "performed"}
 
     @app.websocket("/ws/stream")
@@ -295,3 +295,45 @@ class TestAuthEdgeCases:
             headers={"Authorization": f"Bearer {TEST_TOKEN.upper()}"},
         )
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+class TestHealthEndpointBypass:
+    """Test that /health endpoint bypasses auth."""
+
+    def test_health_endpoint_allows_no_auth(self, client: TestClient) -> None:
+        """GET /health should work without auth token."""
+        from fastapi import FastAPI
+
+        app = FastAPI()
+
+        @app.get("/health")
+        async def health_endpoint(token: str = Depends(require_auth)):
+            return {"status": "healthy"}
+
+        # Create a test client for this specific app
+        from fastapi.testclient import TestClient
+        health_client = TestClient(app)
+        
+        response = health_client.get("/health")
+        assert response.status_code == 200
+        assert response.json()["status"] == "healthy"
+
+    def test_health_endpoint_still_accepts_valid_token(self, client: TestClient) -> None:
+        """GET /health should also work WITH auth token (backwards compatible)."""
+        from fastapi import FastAPI
+
+        app = FastAPI()
+
+        @app.get("/health")
+        async def health_endpoint(token: str = Depends(require_auth)):
+            return {"status": "healthy"}
+
+        from fastapi.testclient import TestClient
+        health_client = TestClient(app)
+        
+        response = health_client.get(
+            "/health",
+            headers={"Authorization": f"Bearer {TEST_TOKEN}"}
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "healthy"

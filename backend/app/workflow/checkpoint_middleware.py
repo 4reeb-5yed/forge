@@ -7,6 +7,7 @@ enabling crash recovery and resume functionality.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from typing import Any, Callable, Awaitable
@@ -116,12 +117,15 @@ class CheckpointMiddleware:
             # Create redacted state for storage (exclude sensitive data)
             redacted_state = self._redact_state(state)
 
+            # Serialize state to JSON string for asyncpg compatibility
+            state_json = json.dumps(redacted_state)
+
             # Write checkpoint
             await self._store.write_checkpoint(
                 session_id=session_id,
                 node_id=node_id,
                 highest_seq=highest_seq,
-                state_json=redacted_state,
+                state_json=state_json,
             )
 
             # Update last checkpoint time
@@ -220,8 +224,17 @@ class CheckpointMiddleware:
                 checkpoint.get("highest_seq"),
             )
 
-            # Return the stored state
-            state = checkpoint.get("state", {})
+            # Get the stored state and make a copy to avoid mutating the stored data
+            stored_state = checkpoint.get("state", {})
+            if not isinstance(stored_state, dict):
+                logger.warning(
+                    "Checkpoint state for session %s is not a dict (got %s) — treating as empty",
+                    session_id, type(stored_state).__name__
+                )
+                stored_state = {}
+
+            # Build recovered state with metadata
+            state = dict(stored_state)  # shallow copy of the state dict
             state["recovered_from_checkpoint"] = True
             state["checkpoint_node_id"] = checkpoint.get("node_id")
             state["checkpoint_seq"] = checkpoint.get("highest_seq")

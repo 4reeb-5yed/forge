@@ -12,7 +12,7 @@ import {
   getHealth,
 } from "@/lib/api";
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2 | 3 | 4;
 
 export default function SetupPage() {
   const router = useRouter();
@@ -25,6 +25,13 @@ export default function SetupPage() {
   const [githubToken, setGithubToken] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
   const [sandboxMode, setSandboxMode] = useState<"always" | "auto" | "never">("auto");
+  const [apiToken, setApiToken] = useState("");
+
+  // Load API token from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem("forge_api_token");
+    if (stored) setApiToken(stored);
+  }, []);
 
   // Test results
   const [openrouterTest, setOpenrouterTest] = useState<KeyTestResult | null>(null);
@@ -129,6 +136,10 @@ export default function SetupPage() {
     setSaving(true);
     setError(null);
     try {
+      // Save API token to localStorage
+      if (apiToken) {
+        localStorage.setItem("forge_api_token", apiToken);
+      }
       await updateConfig({
         openrouter_api_key: openrouterKey,
         github_token: githubToken,
@@ -159,7 +170,7 @@ export default function SetupPage() {
 
         {/* Step indicator */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          {[1, 2, 3].map((s) => (
+          {[1, 2, 3, 4].map((s) => (
             <div key={s} className="flex items-center gap-2">
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${
@@ -172,7 +183,7 @@ export default function SetupPage() {
               >
                 {s < step ? "✓" : s}
               </div>
-              {s < 3 && (
+              {s < 4 && (
                 <div className={`w-8 h-0.5 ${s < step ? "bg-green-500" : "bg-forge-border"}`} />
               )}
             </div>
@@ -213,6 +224,13 @@ export default function SetupPage() {
             />
           )}
 
+          {step === 4 && (
+            <StepApiToken
+              apiToken={apiToken}
+              setApiToken={setApiToken}
+            />
+          )}
+
           {/* Error display */}
           {error && (
             <div className="mt-4 p-3 rounded bg-red-500/10 border border-red-500/30 text-sm text-red-400">
@@ -233,7 +251,7 @@ export default function SetupPage() {
               <div />
             )}
 
-            {step < 3 ? (
+            {step < 4 ? (
               <button
                 onClick={() => setStep((step + 1) as Step)}
                 disabled={step === 1 && !openrouterKey}
@@ -486,6 +504,46 @@ function StepSandboxMode({
             </div>
           </label>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 4: API Token
+// ---------------------------------------------------------------------------
+
+interface StepApiTokenProps {
+  apiToken: string;
+  setApiToken: (v: string) => void;
+}
+
+function StepApiToken({
+  apiToken,
+  setApiToken,
+}: StepApiTokenProps) {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold text-forge-text mb-1">API Token (Optional)</h2>
+      <p className="text-sm text-forge-muted mb-6">
+        Enter the API token for authentication. If authentication is disabled on the server,
+        you can leave this empty. This token is stored locally in your browser.
+      </p>
+
+      <div>
+        <label className="block text-sm text-forge-text mb-1.5">
+          API Token
+        </label>
+        <input
+          type="password"
+          value={apiToken}
+          onChange={(e) => setApiToken(e.target.value)}
+          placeholder="Enter your API token"
+          className="w-full px-3 py-2 rounded bg-forge-bg border border-forge-border text-sm text-forge-text placeholder:text-forge-muted/50 focus:outline-none focus:border-forge-accent"
+        />
+        <p className="mt-2 text-xs text-forge-muted">
+          This token will be sent as a Bearer token with API requests.
+        </p>
       </div>
     </div>
   );
