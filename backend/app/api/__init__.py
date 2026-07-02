@@ -242,17 +242,32 @@ def _serialize_event(event: Event) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def create_app(deps: AppDependencies | None = None) -> FastAPI:
+def create_app(
+    deps: AppDependencies | None = None,
+    *,
+    docs_url: str | None = "/docs",
+    redoc_url: str | None = "/redoc",
+    openapi_url: str | None = "/openapi.json",
+) -> FastAPI:
     """Create and configure the FastAPI application with all endpoints.
 
     Args:
         deps: Optional application dependencies. If None, default instances
               are created.
+        docs_url: Path for the Swagger UI. Set to None to disable.
+        redoc_url: Path for ReDoc. Set to None to disable.
+        openapi_url: Path for the OpenAPI schema. Set to None to disable.
 
     Returns:
         Configured FastAPI application.
     """
-    app = FastAPI(title="Forge Runtime API", version="0.1.0")
+    app = FastAPI(
+        title="Forge Runtime API",
+        version="0.1.0",
+        docs_url=docs_url,
+        redoc_url=redoc_url,
+        openapi_url=openapi_url,
+    )
 
     if deps is not None:
         set_deps(deps)

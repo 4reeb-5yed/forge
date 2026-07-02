@@ -224,27 +224,23 @@ def create_app() -> FastAPI:
     # Create the event store (shared between API and event bus)
     event_store = SessionEventStore()
 
-    api_app = create_api_app()
-    # Include all routes from the API app into this app
+    # Mount the API layer's routes by extracting them from the temp FastAPI app.
+    # Pass docs_url=None to prevent duplicate /docs, /redoc, /openapi.json routes
+    # since the main app generates its own.
+    api_app = create_api_app(docs_url=None, redoc_url=None, openapi_url=None)
     for route in api_app.routes:
         app.routes.append(route)
 
     # Store the event store so the lifespan can wire it
     app.state.event_store = event_store
 
-    # Mount the config API router
+    # Mount the config, approval, and recovery routers
     from app.api.config import config_router
-
-    app.include_router(config_router)
-
-    # Mount the approval API router
     from app.api.approval import approval_router
-
-    app.include_router(approval_router)
-
-    # Mount the recovery API router
     from app.api.recovery import recovery_router
 
+    app.include_router(config_router)
+    app.include_router(approval_router)
     app.include_router(recovery_router)
 
     @app.post("/workflow/invoke", response_model=InvokeResponse)
@@ -376,5 +372,21 @@ def create_app() -> FastAPI:
             "configured": configured,
             "components": components,
         }
+
+    # Flatten _IncludedRouter wrappers so all routes appear directly in app.routes
+    # with real .path attributes. Without this, _IncludedRouter lacks .path and breaks
+    # url_path_for() and route introspection. _IncludedRouter stores the original
+    # APIRouter as .original_router; we extract its routes (not recursing further to
+    # avoid double-flattening router-in-router patterns).
+    flattened = []
+    for route in app.routes:
+        if type(route).__name__ == "_IncludedRouter":
+            orig = getattr(route, "original_router", None)
+            if orig is not None and hasattr(orig, "routes"):
+                for sub in orig.routes:
+                    flattened.append(sub)
+        else:
+            flattened.append(route)
+    app.routes[:] = flattened
 
     return app

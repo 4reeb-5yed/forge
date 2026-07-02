@@ -268,3 +268,42 @@ class TestCreateApp:
                     if hasattr(sub, 'path'):
                         routes.append(sub.path)
         assert "/health" in routes
+
+    def test_no_included_router_wrappers_in_routes(self):
+        """All routes in app.routes have a .path attribute.
+
+        Regression: previously the manual `for route in api_app.routes:
+        app.routes.append(route)` pattern left _IncludedRouter wrappers that
+        lack .path, breaking url_path_for() and route introspection.
+        """
+        from app.workflow.app import create_app
+
+        app = create_app()
+        for route in app.routes:
+            assert hasattr(route, 'path'), (
+                f"{type(route).__name__} has no .path — route list not flattened. "
+                "Use include_router or flatten _IncludedRouter after appending."
+            )
+
+    def test_no_duplicate_route_paths(self):
+        """No (path, method) combination appears more than once in app.routes.
+
+        Regression: route copying patterns and router definitions with duplicate
+        decorators can produce duplicate routes, causing ambiguous path matches.
+        Note: POST /sessions and GET /sessions are NOT duplicates — same path,
+        different HTTP methods are distinct routes.
+        """
+        from collections import Counter
+
+        from fastapi.routing import APIRoute
+
+        from app.workflow.app import create_app
+
+        app = create_app()
+        path_methods = []
+        for route in app.routes:
+            if isinstance(route, APIRoute):
+                # route.methods is a frozenset; convert to tuple for hashing
+                path_methods.append((route.path, tuple(sorted(route.methods))))
+        dupes = [(p, tuple(sorted(m))) for p, m in Counter(path_methods).items() if m > 1]
+        assert not dupes, f"Duplicate (path, method) routes found: {dupes}"
