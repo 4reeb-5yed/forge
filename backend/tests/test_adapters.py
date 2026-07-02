@@ -271,9 +271,31 @@ class TestGitHubVCSClone:
         assert "--depth=1" in call_args
         assert "--branch" in call_args
         assert "main" in call_args
-        # Token should be injected into URL
-        url_arg = [a for a in call_args if "ghp_testtoken123@" in a]
-        assert len(url_arg) == 1
+        # Token must be in x-access-token:password format (not bare {token}@host)
+        url_arg = [a for a in call_args if "x-access-token:ghp_testtoken123@" in a]
+        assert len(url_arg) == 1, (
+            f"Expected URL with 'x-access-token:ghp_testtoken123@', "
+            f"got: {call_args}"
+        )
+
+    async def test_clone_token_in_password_position(self):
+        """Token goes in password position, not username, to avoid TTY prompt issues."""
+        vcs = GitHubVCS(token="mysecret_token")
+        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
+            mock_proc = AsyncMock()
+            mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+            mock_proc.returncode = 0
+            mock_exec.return_value = mock_proc
+
+            await vcs.clone("https://github.com/owner/repo", "main", "/tmp/dest")
+
+        call_args = mock_exec.call_args[0]
+        url_arg = [a for a in call_args if "github.com" in a][0]
+        # Correct format: https://x-access-token:{token}@github.com/owner/repo
+        # Wrong format:   https://{token}@github.com/owner/repo
+        assert url_arg.startswith("https://x-access-token:mysecret_token@github.com"), (
+            f"Token must be in x-access-token:password format, got: {url_arg}"
+        )
 
     async def test_clone_failure_raises(self):
         """Failed clone raises RuntimeError without exposing token."""

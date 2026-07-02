@@ -361,7 +361,6 @@ class InterruptHandler:
             source="interrupt_handler",
             correlation_id=session_id,
             payload=payload,
-            correlation_id=session_id,
             event_id=str(uuid.uuid4()),
         )
         await self._event_emitter(event)

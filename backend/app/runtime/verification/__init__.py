@@ -261,7 +261,6 @@ class VerificationPipeline:
                 "status": result.status.value,
                 "detail": result.detail,
             },
-            correlation_id=self._session_id,
             event_id=str(uuid.uuid4()),
         )
 
@@ -285,7 +284,6 @@ class VerificationPipeline:
             payload={
                 "task_id": self._task_id,
             },
-            correlation_id=self._session_id,
             event_id=str(uuid.uuid4()),
         )
 

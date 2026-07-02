@@ -315,7 +315,6 @@ class LearningRecorder:
                 "task_id": task_id,
                 "detail": error,
             },
-            correlation_id=session_id,
             event_id=str(uuid.uuid4()),
         )
         try:

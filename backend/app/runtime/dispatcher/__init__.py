@@ -373,7 +373,6 @@ class TaskDispatcher:
                 "title": task.title,
                 "workspace_id": task.workspace_id,
             },
-            correlation_id=self._session_id,
             event_id=f"dispatch-task-start-{task.id}",
         )
         await self._event_publisher.publish(event)
@@ -392,7 +391,6 @@ class TaskDispatcher:
                     "workspace_id": task.workspace_id,
                     "status": "completed",
                 },
-                correlation_id=self._session_id,
                 event_id=f"dispatch-task-done-{task.id}",
             )
         else:
@@ -408,7 +406,6 @@ class TaskDispatcher:
                     "status": "failed",
                     "error": task.error or "Unknown error",
                 },
-                correlation_id=self._session_id,
                 event_id=f"dispatch-task-fail-{task.id}",
             )
         await self._event_publisher.publish(event)

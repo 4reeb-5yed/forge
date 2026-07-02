@@ -415,7 +415,6 @@ class PolicyEngine:
             source="policy_engine",
             correlation_id=self._session_id,
             payload=payload,
-            correlation_id=self._session_id,
             event_id=str(uuid.uuid4()),
         )
 
@@ -445,7 +444,6 @@ class PolicyEngine:
                 "reason": result.reason,
                 "policy_decision": result.decision.value,
             },
-            correlation_id=self._session_id,
             event_id=str(uuid.uuid4()),
         )
 

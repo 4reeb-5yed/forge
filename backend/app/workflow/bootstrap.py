@@ -78,10 +78,32 @@ async def bootstrap(deps: RuntimeDeps) -> None:
         except Exception as exc:
             logger.warning("ConfigService load failed: %s. Continuing with defaults.", exc)
 
-    # Step 1–3: Discovery
-    # Skip probe-based discovery (no real probes configured).
-    # Instead, register known capabilities directly in Step 4.5.
-    logger.info("Skipping probe-based discovery (no probes configured)")
+    # Step 1–3: Discovery (load config, probe resources, register healthy ones)
+    # Discovery handles config validation, probing, and registration internally.
+    # NOTE: probe_map={} here is intentional — this discovery pass runs before
+    # the OpenRouter adapter is created (that happens later in Step 5 "AI Routing").
+    # Capabilities are re-probed via the HealthMonitor's probe_map after boot,
+    # so an empty map here is safe and expected.
+    if config_dir.exists():
+        try:
+            from app.runtime.discovery import run_discovery
+
+            await run_discovery(
+                config_dir=config_dir,
+                registry=deps.registry,
+                probe_map={},
+                event_emitter=deps.event_bus.publish,
+                session_id="boot",
+            )
+        except Exception as exc:
+            logger.warning(
+                "Discovery skipped or failed: %s. Continuing with empty registry.",
+                exc,
+            )
+    else:
+        logger.info(
+            "Config directory '%s' not found; skipping discovery.", config_dir
+        )
 
     # Step 4: Start health monitor background task
     try:

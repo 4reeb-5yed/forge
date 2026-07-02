@@ -832,7 +832,6 @@ class ModelRouter:
                 "attempt": attempt,
                 "reason": "success",
             },
-            correlation_id=self._session_id,
             event_id=str(uuid.uuid4()),
         )
         try:
@@ -869,7 +868,6 @@ class ModelRouter:
                 "attempt": attempt,
                 "reason": "previous_provider_failed",
             },
-            correlation_id=self._session_id,
             event_id=str(uuid.uuid4()),
         )
         try:

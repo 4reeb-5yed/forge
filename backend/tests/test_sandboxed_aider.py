@@ -6,6 +6,7 @@ Tests cover:
 - Diff capture after execution
 - Health check logic
 - Error paths (Docker not found, container failure)
+- Default model configuration (must be OpenRouter-routed)
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.adapters.sandboxed_aider import SandboxedAiderTool
+from app.adapters.sandboxed_aider import DEFAULT_MODEL, SandboxedAiderTool
 
 
 @pytest.fixture
@@ -384,3 +385,52 @@ class TestHealthCheck:
         from app.runtime.types import HealthStatus
         assert health.status == HealthStatus.UNHEALTHY
         assert "not found" in health.message.lower()
+
+
+class TestDefaultModelConfiguration:
+    """Verify the default model is OpenRouter-routed, not a raw provider model.
+
+    The sandbox only ever receives OPENROUTER_API_KEY (never ANTHROPIC_API_KEY or
+    any other provider key). A raw provider model name makes Aider try to call
+    that provider directly, which then fails with a silent litellm.AuthenticationError
+    — Aider exits 0 but produces zero file changes.
+    """
+
+    def test_default_model_is_openrouter_routed(self):
+        """DEFAULT_MODEL must use the openrouter/<provider>/<model> format."""
+        assert DEFAULT_MODEL.startswith("openrouter/"), (
+            f"DEFAULT_MODEL must be OpenRouter-routed (openrouter/<provider>/<model>), "
+            f"got: {DEFAULT_MODEL!r}. Raw provider model names cause Aider to call "
+            f"the provider directly with OPENROUTER_API_KEY, which fails silently."
+        )
+
+    def test_default_model_is_not_bare_anthropic(self):
+        """Bare Anthropic model names (no openrouter/ prefix) are wrong for the sandbox."""
+        assert not DEFAULT_MODEL.startswith("claude-"), (
+            f"DEFAULT_MODEL must not be a bare Anthropic model name like {DEFAULT_MODEL!r}. "
+            f"The sandbox only has OPENROUTER_API_KEY, not ANTHROPIC_API_KEY."
+        )
+        assert "anthropic/" not in DEFAULT_MODEL or DEFAULT_MODEL.startswith("openrouter/"), (
+            f"OpenRouter model names must start with 'openrouter/', got: {DEFAULT_MODEL!r}"
+        )
+
+    def test_tool_uses_openrouter_model_by_default(self):
+        """A default-constructed tool passes an OpenRouter-routed model to Aider."""
+        tool = SandboxedAiderTool(openrouter_api_key="test-key")
+        assert tool._model.startswith("openrouter/"), (
+            f"Tool default model must be OpenRouter-routed, got: {tool._model!r}"
+        )
+
+    def test_tool_passes_openrouter_model_to_aider(self):
+        """The model passed to Aider inside the container must be OpenRouter-routed."""
+        tool = SandboxedAiderTool(openrouter_api_key="test-key")
+        cmd = tool._build_docker_command(
+            container_name="test",
+            workspace_path="/tmp/workspace",
+            task_description="fix bug",
+        )
+        idx = cmd.index("--model")
+        model_passed = cmd[idx + 1]
+        assert model_passed.startswith("openrouter/"), (
+            f"Model passed to Aider must be OpenRouter-routed, got: {model_passed!r}"
+        )
