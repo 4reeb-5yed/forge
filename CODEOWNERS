@@ -1,0 +1,16 @@
+# CODEOWNERS
+#
+# Each line is a file pattern followed by one or more owners.
+# Owners are automatically requested for review when a PR touches matching files.
+#
+# Order matters: rules are evaluated top to bottom, and the last matching rule wins.
+# Keep the wildcard fallback at the top and more specific rules below it, so specific
+# rules override the fallback for their paths.
+#
+# To add an owner for a specific area as the team grows, add a new line below the
+# fallback with the path pattern and the new owner(s), e.g.:
+#   /backend/app/adapters/  @some-other-username
+#   /frontend/              @frontend-owner
+
+# Fallback: one owner for everything not matched below.
+*  @4reeb-5yed
