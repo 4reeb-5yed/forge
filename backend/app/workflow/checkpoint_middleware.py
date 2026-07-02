@@ -224,8 +224,17 @@ class CheckpointMiddleware:
                 checkpoint.get("highest_seq"),
             )
 
-            # Return the stored state
-            state = checkpoint.get("state", {})
+            # Get the stored state and make a copy to avoid mutating the stored data
+            stored_state = checkpoint.get("state", {})
+            if not isinstance(stored_state, dict):
+                logger.warning(
+                    "Checkpoint state for session %s is not a dict (got %s) — treating as empty",
+                    session_id, type(stored_state).__name__
+                )
+                stored_state = {}
+
+            # Build recovered state with metadata
+            state = dict(stored_state)  # shallow copy of the state dict
             state["recovered_from_checkpoint"] = True
             state["checkpoint_node_id"] = checkpoint.get("node_id")
             state["checkpoint_seq"] = checkpoint.get("highest_seq")

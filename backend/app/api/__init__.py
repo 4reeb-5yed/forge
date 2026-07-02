@@ -652,8 +652,17 @@ def create_app(
         Forwards each typed Event for the session in strictly increasing
         seq order without adding engineering logic.
 
-        Requirements: 26.2, 26.3
+        Requirements: 26.2, 26.3, 26.5, 26.6
         """
+        from app.api.auth import WebSocketAuthError, require_ws_auth
+
+        # Auth check FIRST: don't leak session existence to unauthenticated callers
+        try:
+            await require_ws_auth(websocket)
+        except WebSocketAuthError as e:
+            await websocket.close(code=1008, reason=str(e))
+            return
+
         deps = get_deps()
 
         # Requirement 26.3: reject connection for non-existent session

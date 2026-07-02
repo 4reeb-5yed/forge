@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from typing import Any
@@ -75,6 +76,12 @@ async def get_latest_checkpoint(
     """Get the most recent checkpoint for a session (by highest_seq desc).
 
     Returns `None` if `session_id` is not a valid UUID — see `_coerce_session_uuid`.
+
+    The returned dict contains:
+    - node_id: str
+    - highest_seq: int
+    - state: dict (parsed from state_json column)
+    - (other columns from the row)
     """
     session_uuid = _coerce_session_uuid(session_id)
     if session_uuid is None:
@@ -91,7 +98,31 @@ async def get_latest_checkpoint(
             session_uuid,
         )
 
-    return dict(row) if row else None
+    if not row:
+        return None
+
+    # Convert row to dict
+    result = dict(row)
+
+    # Parse state_json into a dict and expose as 'state' for consistency
+    state_json = result.get("state_json")
+    if state_json is not None:
+        if isinstance(state_json, str):
+            try:
+                result["state"] = json.loads(state_json)
+            except (json.JSONDecodeError, TypeError):
+                logger.warning(
+                    "Failed to parse state_json for session %s — returning empty state",
+                    session_id,
+                )
+                result["state"] = {}
+        else:
+            # Already parsed (shouldn't happen with asyncpg unless codec registered)
+            result["state"] = state_json
+    else:
+        result["state"] = {}
+
+    return result
 
 
 async def list_non_terminal_sessions(pool: asyncpg.Pool) -> list[dict[str, Any]]:
